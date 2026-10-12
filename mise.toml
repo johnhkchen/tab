@@ -133,3 +133,7 @@ run = "scripts/version-check"
 description = "Tag the current version (vX.Y.Z) after the gate passes. Pushing the tag publishes."
 depends = ["check"]
 run = "scripts/release"
+
+[tasks."access:apply"]
+description = "Lock the website's CMS admin behind Cloudflare Access (needs the Doppler prd token)"
+run = "doppler run --project tab --config prd -- scripts/cloudflare-access"

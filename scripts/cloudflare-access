@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+# Locks the website's CMS admin (tab.b28.dev/_emdash/*) behind Cloudflare Access,
+# so only the maintainer's email can reach it, before and after EmDash setup.
+#
+# Safe to re-run: every step looks for what it would create and reuses it.
+# Needs CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID, from Doppler:
+#   mise run access:apply
+# Token permissions: Access: Apps and Policies Write, and
+# Access: Organizations, Identity Providers, and Groups Write.
+set -euo pipefail
+
+: "${CLOUDFLARE_API_TOKEN:?run through Doppler: mise run access:apply}"
+: "${CLOUDFLARE_ACCOUNT_ID:?run through Doppler: mise run access:apply}"
+
+ADMIN_EMAIL="${TAB_ADMIN_EMAIL:-john.hk.chen@gmail.com}"
+ADMIN_PATH="tab.b28.dev/_emdash"
+APP_NAME="Tab website admin"
+POLICY_NAME="Tab maintainer only"
+IDP_NAME="One-time PIN"
+
+api() { # api METHOD PATH [JSON]
+  local method=$1 path=$2 body=${3:-}
+  local args=(-sS -X "$method" -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN"
+    "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/$path")
+  [[ -n $body ]] && args+=(-H "Content-Type: application/json" --data "$body")
+  local out
+  out=$(curl "${args[@]}")
+  python3 -c '
+import json, sys
+d = json.loads(sys.argv[1])
+if not d.get("success"):
+    sys.exit("Cloudflare API error: " + json.dumps(d.get("errors")))
+print(json.dumps(d["result"]))' "$out"
+}
+
+find_id() { # find_id JSON_LIST FIELD VALUE
+  python3 -c '
+import json, sys
+for item in json.loads(sys.argv[1]) or []:
+    if item.get(sys.argv[2]) == sys.argv[3]:
+        print(item["id"]); break' "$1" "$2" "$3"
+}
+
+# 1. Email one-time PIN login (Cloudflare no longer adds it by default).
+idps=$(api GET access/identity_providers)
+idp_id=$(find_id "$idps" type onetimepin)
+if [[ -z $idp_id ]]; then
+  idp_id=$(api POST access/identity_providers \
+    "{\"name\":\"$IDP_NAME\",\"type\":\"onetimepin\",\"config\":{}}" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  echo "created login method: $IDP_NAME"
+else
+  echo "login method exists: $IDP_NAME"
+fi
+
+# 2. A reusable policy that allows exactly one email.
+policy_body=$(python3 -c '
+import json, sys
+print(json.dumps({"name": sys.argv[1], "decision": "allow",
+  "include": [{"email": {"email": sys.argv[2]}}], "session_duration": "24h"}))' \
+  "$POLICY_NAME" "$ADMIN_EMAIL")
+policies=$(api GET access/policies)
+policy_id=$(find_id "$policies" name "$POLICY_NAME")
+if [[ -z $policy_id ]]; then
+  policy_id=$(api POST access/policies "$policy_body" |
+    python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
+  echo "created policy: $POLICY_NAME ($ADMIN_EMAIL)"
+else
+  api PUT "access/policies/$policy_id" "$policy_body" >/dev/null
+  echo "updated policy: $POLICY_NAME ($ADMIN_EMAIL)"
+fi
+
+# 3. The Access application covering every path under /_emdash, with the
+#    one-time PIN as its only login method. Deny is the default; the policy
+#    above is the only way in.
+app_body=$(python3 -c '
+import json, sys
+name, path, idp, policy = sys.argv[1:5]
+print(json.dumps({"name": name, "type": "self_hosted", "domain": path,
+  "destinations": [{"type": "public", "uri": path}],
+  "policies": [{"id": policy, "precedence": 1}],
+  "allowed_idps": [idp], "auto_redirect_to_identity": True,
+  "app_launcher_visible": False}))' "$APP_NAME" "$ADMIN_PATH" "$idp_id" "$policy_id")
+apps=$(api GET access/apps)
+app_id=$(find_id "$apps" name "$APP_NAME")
+if [[ -z $app_id ]]; then
+  api POST access/apps "$app_body" >/dev/null
+  echo "created app: $APP_NAME -> $ADMIN_PATH/*"
+else
+  api PUT "access/apps/$app_id" "$app_body" >/dev/null
+  echo "updated app: $APP_NAME -> $ADMIN_PATH/*"
+fi
