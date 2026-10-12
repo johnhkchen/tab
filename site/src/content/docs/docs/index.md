@@ -9,12 +9,17 @@ the record straight.
 
 ## What works today
 
-Version 0.1.0 is the foundation. You can run Tab, and it starts up cleanly with
-its database ready, but you can't log expenses yet. Expenses, groups, and
-balances come next.
+Version 0.3.0 runs a shared house. You can make a group, invite people, add
+expenses split any way you like, see who owes whom, and settle up. Bills that
+come back log in a tap, splits change while someone's away, and you can ask for
+money with a message you copy.
+
+Reading bills from email and photos comes next.
 
 ## Where to go
 
+- **[Bills, time away, and asking for it](/docs/bills/)**: rent, temporary
+  splits, and statement links.
 - **[Run it yourself](/docs/self-host/)**: one command on your own computer or server.
 - **[How your privacy is kept](/docs/privacy/)**: what stops other people from
   seeing your data, and how you can check it yourself.

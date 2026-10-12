@@ -12,6 +12,9 @@ rows you're not allowed to see.
 - **Your group sees your group's shared bills.** Nobody outside the group can.
 - **Your own spending is yours.** Other people in your group can't see it, not
   even whoever set the group up.
+- **A statement link shows one person's month.** Anyone with the link sees
+  that person's shared bills and payments for that month, and nothing else.
+  It lasts 30 days, and anyone in the group can turn it off.
 - **Nothing is ever deleted behind your back.** Changes are recorded, not erased.
 - **The bill reader can't change anything.** It can only suggest an entry. You
   confirm it before it's added.

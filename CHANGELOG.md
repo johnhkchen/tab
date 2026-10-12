@@ -2,7 +2,7 @@
 
 What changed in each version of Tab, newest first.
 
-## [Unreleased]
+## [0.3.0] - 2026-10-13
 
 Bills that come back, people who go away, and asking for money without the awkward text.
 
