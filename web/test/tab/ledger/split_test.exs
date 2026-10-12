@@ -155,7 +155,7 @@ defmodule Tab.Ledger.SplitTest do
 
   defp parties(n),
     do:
-      Enum.map(1..n, fn i -> "00000000-0000-4000-8000-#{String.pad_leading("#{i}", 12, "0")}" end)
+      Enum.map(1..n//1, fn i -> "00000000-0000-4000-8000-#{String.pad_leading("#{i}", 12, "0")}" end)
 
   defp amount, do: integer(1..10_000_000)
 

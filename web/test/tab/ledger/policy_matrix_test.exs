@@ -67,7 +67,8 @@ defmodule Tab.Ledger.PolicyMatrixTest do
   end
 
   @tables ~w(users users_tokens profiles groups memberships invites counterparties categories
-             expenses expense_shares payments audit_log)
+             expenses expense_shares payments audit_log recurring_templates split_overrides
+             statement_links)
 
   test "nobody can delete from any table, not even their own rows", ctx do
     for table <- @tables, who <- [:admin, :member, :other, :outsider] do

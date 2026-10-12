@@ -53,6 +53,37 @@ defmodule Tab.Ledger.Split do
     end
   end
 
+  @doc """
+  Each party's weight under the split: their share is `weight / total weight`.
+  `equal`, `percentage`, and `shares` don't depend on the amount; `exact` and
+  `tiered` do, so they need it and give cents. Used to blend splits by days
+  (`Tab.Bills.Suggest`).
+  """
+  @spec weights(map, pos_integer | nil) ::
+          {:ok, [{party, non_neg_integer}]} | {:error, String.t()}
+  def weights(split, amount \\ nil) do
+    with {:ok, type, entries} <- parse(split) do
+      case type do
+        "equal" ->
+          {:ok, Enum.map(parties(entries), &{&1, 1})}
+
+        "percentage" ->
+          with {:ok, hs} <- values(entries, &hundredths_of_percent/1, "percentages"),
+               do: {:ok, Enum.zip(parties(entries), hs)}
+
+        "shares" ->
+          with {:ok, ws} <- values(entries, &weight/1, "shares"),
+               do: {:ok, Enum.zip(parties(entries), ws)}
+
+        _ when is_integer(amount) and amount > 0 ->
+          compute(split, amount)
+
+        _ ->
+          {:error, "this split needs the amount"}
+      end
+    end
+  end
+
   defp run("equal", entries, _split, amount) do
     {:ok, by_weight(entries, Enum.map(entries, fn _ -> 1 end), amount)}
   end

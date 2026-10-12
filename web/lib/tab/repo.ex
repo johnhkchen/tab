@@ -28,4 +28,19 @@ defmodule Tab.Repo do
       result
     end)
   end
+
+  @doc """
+  Runs `fun` as nobody: the `tab_user` role with no person set, so every
+  policy refuses. For the few `SECURITY DEFINER` functions that check a token
+  themselves, like `read_statement`.
+  """
+  def as_nobody(fun) when is_function(fun, 0) do
+    transaction(fn ->
+      query!("SET LOCAL ROLE tab_user")
+      query!("SELECT set_config('app.user_id', '', true)")
+      result = fun.()
+      query!("RESET ROLE")
+      result
+    end)
+  end
 end

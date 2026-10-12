@@ -311,6 +311,19 @@ defmodule Tab.Ledger do
     end)
   end
 
+  @doc """
+  How long money waits in the group, as this person can see it
+  (`Tab.Ledger.Float.walk/3`): per share, per person who paid, and the shares
+  still open between each pair.
+  """
+  def float(%Scope{} = scope, group_id, today \\ Date.utc_today()) do
+    with {:ok, expenses} <- list_expenses(scope, group_id),
+         {:ok, payments} <- list_payments(scope, group_id) do
+      counted = Enum.filter(payments, &(&1.status in ~w(confirmed self_attested)))
+      {:ok, Tab.Ledger.Float.walk(expenses, counted, today)}
+    end
+  end
+
   defp tag_parties(row), do: %{row | debtor: tag(row.debtor), creditor: tag(row.creditor)}
   defp tag({"user", id}), do: {:user, id}
   defp tag({"counterparty", id}), do: {:counterparty, id}

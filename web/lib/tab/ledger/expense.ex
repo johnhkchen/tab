@@ -12,6 +12,8 @@ defmodule Tab.Ledger.Expense do
     field :split, :map
     field :period_start, :date
     field :period_end, :date
+    # Set when the expense was logged from a recurring bill.
+    belongs_to :template, Tab.Bills.Template
     field :created_by, :binary_id
     # Set by the database when what was spent or how it's split changes.
     field :edited_at, :utc_datetime
@@ -32,7 +34,8 @@ defmodule Tab.Ledger.Expense do
       :visibility,
       :split,
       :period_start,
-      :period_end
+      :period_end,
+      :template_id
     ])
     |> validate_required([:description, :amount_cents, :date, :paid_by, :split])
     |> update_change(:description, &String.trim/1)
