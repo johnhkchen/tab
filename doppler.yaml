@@ -1,0 +1,6 @@
+# Maps this repo to the Doppler project that holds the maintainer's secrets.
+# `doppler setup` reads it; `doppler run -- <cmd>` injects the secrets.
+# Self-hosters don't need Doppler: a plain .env file next to compose.yaml works.
+setup:
+  - project: tab
+    config: dev
