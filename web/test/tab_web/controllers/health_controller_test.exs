@@ -6,7 +6,7 @@ defmodule TabWeb.HealthControllerTest do
 
     assert body["status"] == "ok"
     assert body["db"] == "ok"
-    assert body["version"] == "0.1.0"
+    assert body["version"] == to_string(Application.spec(:tab, :vsn))
     assert body["extract"] in ["ok", "unreachable"]
   end
 end

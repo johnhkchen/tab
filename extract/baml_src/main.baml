@@ -3,7 +3,7 @@
 // it can only ever propose, never commit (spec §5, §5.0).
 
 function version() -> string {
-    "0.1.0"
+    "0.2.0"
 }
 
 function route(req: baml.http.ServerRequest) -> baml.http.Response throws never {

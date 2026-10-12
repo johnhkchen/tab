@@ -2,7 +2,9 @@
 
 What changed in each version of Tab, newest first.
 
-## [Unreleased]
+## [0.2.0] - 2026-10-12
+
+The ledger and the web app: you can run your house's shared expenses on it.
 
 ### Added
 - The ledger, kept honest by the database itself: groups, invites, members,
