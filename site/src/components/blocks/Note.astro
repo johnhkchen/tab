@@ -1,0 +1,12 @@
+---
+import { PortableText, type BlockComponentProps } from 'emdash/ui';
+import type { PageContentBlock } from '../../../emdash-env';
+
+type Props = BlockComponentProps<Extract<PageContentBlock, { _type: 'note' }>>;
+
+const { body } = Astro.props.value;
+---
+
+<div class="note prose">
+	<PortableText value={body} />
+</div>

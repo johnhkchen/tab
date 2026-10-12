@@ -1,26 +1,40 @@
 {
   "name": "tab-site",
   "type": "module",
+  "private": true,
+  "emdash": {
+    "seed": "seed/seed.json"
+  },
   "scripts": {
-    "dev": "astro dev",
+    "dev": "node scripts/dev.mjs",
+    "seed": "node scripts/seed.mjs",
     "build": "astro build",
-    "check": "astro check",
-    "preview": "wrangler dev",
+    "check": "astro check && pnpm check:plans",
+    "check:plans": "node --test src/data/plans.test.ts",
+    "preview": "astro build && wrangler dev",
     "deploy:check": "wrangler deploy --dry-run",
     "deploy": "wrangler deploy",
     "astro": "astro"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.3.4",
+    "@astrojs/react": "^7.0.1",
     "@astrojs/starlight": "^0.42.6",
+    "@emdash-cms/cloudflare": "1.2.0",
     "@fontsource-variable/karla": "^5.3.0",
     "@fontsource-variable/lora": "^5.3.0",
-    "astro": "^7.2.10",
+    "astro": "^7.3.8",
+    "emdash": "1.2.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "sharp": "^0.35.3"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@cloudflare/workers-types": "^5.20261006.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "typescript": "^6.0.3",
     "wrangler": "4.149.0"
-  },
-  "private": true
+  }
 }

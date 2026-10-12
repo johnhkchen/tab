@@ -1,0 +1,926 @@
+{
+	"$schema": "https://emdashcms.com/seed.schema.json",
+	"version": "1",
+	"meta": {
+		"name": "Tab",
+		"description": "Tab's landing and pricing pages",
+		"author": "John Chen"
+	},
+	"settings": {
+		"title": "Tab",
+		"tagline": "Keeps the running tab for your house, so nobody has to.",
+		"seo": {
+			"titleSeparator": "·"
+		}
+	},
+	"blockTypes": [
+		{
+			"slug": "intro",
+			"label": "Page top",
+			"description": "The big heading and the line under it",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "heading",
+							"label": "Big heading",
+							"type": "string",
+							"required": true
+						},
+						{
+							"slug": "lede",
+							"label": "Line under the heading",
+							"type": "text"
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "text",
+			"label": "Text",
+			"description": "Paragraphs, headings, lists and links",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "body",
+							"label": "Text",
+							"type": "portableText",
+							"required": true
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "note",
+			"label": "Note box",
+			"description": "A short message in a sunken box",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "body",
+							"label": "Text",
+							"type": "portableText",
+							"required": true
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "buttons",
+			"label": "Buttons",
+			"description": "A row of buttons that link somewhere",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "buttons",
+							"label": "Buttons",
+							"type": "repeater",
+							"required": true,
+							"validation": {
+								"minItems": 1,
+								"maxItems": 4,
+								"subFields": [
+									{
+										"slug": "label",
+										"label": "Button text",
+										"type": "string",
+										"required": true
+									},
+									{
+										"slug": "url",
+										"label": "Link (starts with / or https://)",
+										"type": "string",
+										"required": true
+									},
+									{
+										"slug": "soft",
+										"label": "Lighter button",
+										"type": "boolean"
+									}
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "cards",
+			"label": "Cards",
+			"description": "A heading and a shelf of cards",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "headline",
+							"label": "Heading",
+							"type": "string"
+						},
+						{
+							"slug": "wide",
+							"label": "Two cards to a row",
+							"type": "boolean"
+						},
+						{
+							"slug": "cards",
+							"label": "Cards",
+							"type": "repeater",
+							"required": true,
+							"validation": {
+								"minItems": 1,
+								"maxItems": 12,
+								"subFields": [
+									{
+										"slug": "title",
+										"label": "Card heading",
+										"type": "string",
+										"required": true
+									},
+									{
+										"slug": "body",
+										"label": "Card text",
+										"type": "text",
+										"required": true
+									},
+									{
+										"slug": "link_label",
+										"label": "Link text at the end (optional)",
+										"type": "string"
+									},
+									{
+										"slug": "link_url",
+										"label": "Link (starts with / or https://)",
+										"type": "string"
+									}
+								]
+							}
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "small_print",
+			"label": "Small print",
+			"description": "A quieter paragraph",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "text",
+							"label": "Text",
+							"type": "text",
+							"required": true
+						}
+					]
+				}
+			]
+		},
+		{
+			"slug": "plans",
+			"label": "Plans and prices",
+			"description": "The plan cards. Prices come from the code, so they can't be changed here",
+			"currentVersion": 1,
+			"versions": [
+				{
+					"version": 1,
+					"fields": [
+						{
+							"slug": "headline",
+							"label": "Heading",
+							"type": "string"
+						}
+					]
+				}
+			]
+		}
+	],
+	"collections": [
+		{
+			"slug": "pages",
+			"label": "Pages",
+			"labelSingular": "Page",
+			"urlPattern": "/{slug}",
+			"supports": [
+				"drafts",
+				"revisions",
+				"preview"
+			],
+			"fields": [
+				{
+					"slug": "title",
+					"label": "Title",
+					"type": "string",
+					"required": true
+				},
+				{
+					"slug": "description",
+					"label": "Short description for search results",
+					"type": "text"
+				},
+				{
+					"slug": "content",
+					"label": "Content",
+					"type": "blocks",
+					"validation": {
+						"allowedTypes": [
+							"intro",
+							"text",
+							"note",
+							"buttons",
+							"cards",
+							"small_print",
+							"plans"
+						],
+						"maxItems": 30
+					}
+				}
+			]
+		}
+	],
+	"content": {
+		"pages": [
+			{
+				"id": "home",
+				"slug": "home",
+				"status": "published",
+				"data": {
+					"title": "Tab",
+					"description": "Tab keeps the running tab for your house: who paid, who owes, and what's settled. Free to run yourself, no ads, no limits.",
+					"content": [
+						{
+							"_type": "intro",
+							"_version": 1,
+							"_key": "home-intro",
+							"heading": "Tab",
+							"lede": "Keeps the running tab for your house, so nobody has to."
+						},
+						{
+							"_type": "text",
+							"_version": 1,
+							"_key": "home-what",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b2",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s1",
+											"text": "Housemates, family, a book club, a camping trip: someone always ends up keeping track of who paid for what. Tab keeps that record for you. Everyone sees the shared bills, everyone sees what they owe, and nobody has to send the \"hey, just a reminder\" text.",
+											"marks": []
+										}
+									]
+								}
+							]
+						},
+						{
+							"_type": "buttons",
+							"_version": 1,
+							"_key": "home-buttons",
+							"buttons": [
+								{
+									"label": "Run it yourself",
+									"url": "/docs/self-host/"
+								},
+								{
+									"label": "See pricing",
+									"url": "/pricing",
+									"soft": true
+								}
+							]
+						},
+						{
+							"_type": "note",
+							"_version": 1,
+							"_key": "home-note",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b5",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s3",
+											"text": "Tab is being built in the open.",
+											"marks": [
+												"strong"
+											]
+										},
+										{
+											"_type": "span",
+											"_key": "s4",
+											"text": " Version 0.1.0 is the foundation: it runs, but you can't log expenses with it yet. Everything below is what it's for.",
+											"marks": []
+										}
+									]
+								}
+							]
+						},
+						{
+							"_type": "cards",
+							"_version": 1,
+							"_key": "home-for",
+							"headline": "What it's for",
+							"cards": [
+								{
+									"title": "Splitting bills",
+									"body": "Evenly, by exact amounts, or the real-life way: \"$70 off the top for the heater, then 60/40 for the rest.\""
+								},
+								{
+									"title": "Reading bills for you",
+									"body": "Forward the electric bill's email. Tab suggests the entry and the split; you tap to confirm. Nothing is added without you."
+								},
+								{
+									"title": "Paying back in pieces",
+									"body": "Pay $40 now and $60 next week. The balance just goes down. No \"partially settled\" fuss."
+								},
+								{
+									"title": "Keeping your spending yours",
+									"body": "Log your own purchases next to the shared ones. Nobody else in the group can see them, not even whoever set the group up."
+								},
+								{
+									"title": "Asking from Claude",
+									"body": "Connect Tab to Claude Code or Claude Desktop and ask \"what does Marcus owe me?\" It runs on your own Claude plan."
+								},
+								{
+									"title": "Taking your data with you",
+									"body": "Export everything to a spreadsheet, any time, on every plan."
+								}
+							]
+						},
+						{
+							"_type": "text",
+							"_version": 1,
+							"_key": "home-wont",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b7",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s6",
+											"text": "What it won't do",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b9",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s8",
+											"text": "Show you ads. Not on the free plan, not ever.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b11",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s10",
+											"text": "Cap how many expenses you can log a day to push you into paying.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b13",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s12",
+											"text": "Sell or share your data.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b15",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s14",
+											"text": "Move money. Tab keeps the record; you pay people however you already do.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								}
+							]
+						},
+						{
+							"_type": "cards",
+							"_version": 1,
+							"_key": "home-ways",
+							"headline": "Two ways to have it",
+							"cards": [
+								{
+									"title": "Run it yourself",
+									"body": "Free, forever. One command on a spare computer or a cheap server, and the data never leaves your hands.",
+									"link_label": "How to run it",
+									"link_url": "/docs/self-host/"
+								},
+								{
+									"title": "Let us host it",
+									"body": "Not open yet. When it is, every new account gets 3 months of Plus free. After that there's a free plan, and Plus, which reads your bills for you, is $10 a year.",
+									"link_label": "See pricing",
+									"link_url": "/pricing"
+								}
+							]
+						}
+					]
+				}
+			},
+			{
+				"id": "pricing",
+				"slug": "pricing",
+				"status": "published",
+				"data": {
+					"title": "Pricing",
+					"description": "Tab's prices, in full: free to run yourself, a free hosted plan, Plus at $10 a year, and Pro at $24 a year.",
+					"content": [
+						{
+							"_type": "intro",
+							"_version": 1,
+							"_key": "pricing-intro",
+							"heading": "Pricing",
+							"lede": "A whole year of Tab Plus costs about what two months of Splitwise Pro do."
+						},
+						{
+							"_type": "note",
+							"_version": 1,
+							"_key": "pricing-note",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b18",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s16",
+											"text": "Hosted plans aren't open yet.",
+											"marks": [
+												"strong"
+											]
+										},
+										{
+											"_type": "span",
+											"_key": "s17",
+											"text": " These are the prices they'll open at. How many bills each plan reads a month will be published here before anyone can sign up.",
+											"marks": []
+										}
+									]
+								}
+							]
+						},
+						{
+							"_type": "text",
+							"_version": 1,
+							"_key": "pricing-every",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b20",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s19",
+											"text": "On every plan",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b22",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s21",
+											"text": "Log as many expenses as you like. No daily limits.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b24",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s23",
+											"text": "Full history, balances, and settling up.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b26",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s25",
+											"text": "Export all your data to a spreadsheet, any time.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b28",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s27",
+											"text": "Ask from Claude Code or Claude Desktop, on your own Claude plan.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b30",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s29",
+											"text": "No ads. We never sell your data.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								}
+							]
+						},
+						{
+							"_type": "plans",
+							"_version": 1,
+							"_key": "pricing-plans",
+							"headline": "The plans"
+						},
+						{
+							"_type": "text",
+							"_version": 1,
+							"_key": "pricing-trial",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b32",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s31",
+											"text": "Try Plus free",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b34",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s33",
+											"text": "Every new account gets 3 months of Plus, free. No card needed. When it's up, your account goes back to free unless you ask for more.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b36",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s35",
+											"text": "Trial bill reading is best-effort: a smaller monthly limit, and members' bills are read first, so yours may take a little longer.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b38",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s37",
+											"text": "Want more? Just ask. We'll ask you one question, like what you use Tab for, and add 6 more months. Ask again when those run out. Later we might ask whether you'd write a few words about Tab that we can share. It doesn't have to be nice, and if we share it, we'll say you got free months.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b40",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s39",
+											"text": "If you read a lot of bills",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b42",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s41",
+											"text": "Plus and Pro members get a much higher monthly limit than the trial, far more than a busy household needs, and their bills are read first. We tell you before you reach it. If you do, bill reading pauses until next month. You can still type expenses in yourself, and nothing else stops.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b44",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s43",
+											"text": "We never charge extra. There's no meter and no surprise bill.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b46",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s45",
+											"text": "Bring a friend, get free months",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b48",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s47",
+											"text": "Share your link. For each person who joins:",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b51",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s49",
+											"text": "1 month",
+											"marks": [
+												"strong"
+											]
+										},
+										{
+											"_type": "span",
+											"_key": "s50",
+											"text": " of Plus when they sign up,",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b54",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s52",
+											"text": "3 more months",
+											"marks": [
+												"strong"
+											]
+										},
+										{
+											"_type": "span",
+											"_key": "s53",
+											"text": " if they get Plus,",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								},
+								{
+									"_type": "block",
+									"_key": "b57",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s55",
+											"text": "a whole year",
+											"marks": [
+												"strong"
+											]
+										},
+										{
+											"_type": "span",
+											"_key": "s56",
+											"text": " if they get Pro.",
+											"marks": []
+										}
+									],
+									"listItem": "bullet",
+									"level": 1
+								}
+							]
+						},
+						{
+							"_type": "small_print",
+							"_version": 1,
+							"_key": "pricing-referral-fine",
+							"text": "Already paying? Your next renewal just moves back. Sign-up months top out at 12 a year; the others don't."
+						},
+						{
+							"_type": "text",
+							"_version": 1,
+							"_key": "pricing-rest",
+							"body": [
+								{
+									"_type": "block",
+									"_key": "b59",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s58",
+											"text": "Give someone half a year",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b61",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s60",
+											"text": "Once a year, Plus and Pro members can give someone 6 months of Plus. They don't need a card, and when the 6 months are up, their account goes back to free. Nothing renews, and nobody gets charged.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b63",
+									"style": "h2",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s62",
+											"text": "Why it costs this little",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b65",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s64",
+											"text": "Reading a bill with AI costs us a fraction of a cent, and Tab receives your forwarded bills itself, with no email company in the middle. What actually costs money is the server and the fee on each payment. The prices cover those, not a big margin. We charge once a year so that payment fee doesn't eat a small price.",
+											"marks": []
+										}
+									]
+								},
+								{
+									"_type": "block",
+									"_key": "b67",
+									"style": "normal",
+									"markDefs": [],
+									"children": [
+										{
+											"_type": "span",
+											"_key": "s66",
+											"text": "Tab is also free software. If a plan doesn't suit you, you can run the same thing yourself, for free, with your data.",
+											"marks": []
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			}
+		]
+	}
+}

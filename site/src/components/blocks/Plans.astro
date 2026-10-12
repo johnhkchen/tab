@@ -1,0 +1,26 @@
+---
+// The plan cards. Editors place this block and set its heading; the names,
+// prices, and descriptions come only from src/data/plans.ts.
+import type { BlockComponentProps } from 'emdash/ui';
+import type { PageContentBlock } from '../../../emdash-env';
+import { plans } from '../../data/plans';
+
+type Props = BlockComponentProps<Extract<PageContentBlock, { _type: 'plans' }>>;
+
+const { headline } = Astro.props.value;
+---
+
+{headline && <h2>{headline}</h2>}
+<div class="shelf shelf--pairs">
+	{
+		plans.map((plan) => (
+			<section class="clay-surface">
+				<h3>{plan.name}</h3>
+				<p>
+					<strong>{plan.price}.</strong>
+				</p>
+				<p class="muted">{plan.description}</p>
+			</section>
+		))
+	}
+</div>

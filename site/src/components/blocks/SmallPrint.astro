@@ -1,0 +1,10 @@
+---
+import type { BlockComponentProps } from 'emdash/ui';
+import type { PageContentBlock } from '../../../emdash-env';
+
+type Props = BlockComponentProps<Extract<PageContentBlock, { _type: 'small_print' }>>;
+
+const { text } = Astro.props.value;
+---
+
+<p class="muted">{text}</p>

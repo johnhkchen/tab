@@ -1,93 +1,30 @@
 ---
+// The landing page: the EmDash page with the slug "home".
+import { getEmDashEntry } from 'emdash';
+import PageView from '../components/PageView.astro';
 import Page from '../layouts/Page.astro';
+
+const { entry: page, cacheHint } = await getEmDashEntry('pages', 'home');
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
+
+const fallback = 'Keeps the running tab for your house, so nobody has to.';
 ---
 
-<Page
-	title="Tab"
-	description="Tab keeps the running tab for your house: who paid, who owes, and what's settled. Free to run yourself, no ads, no limits."
->
-	<h1>Tab</h1>
-	<p class="lede">Keeps the running tab for your house, so nobody has to.</p>
-
-	<p>
-		Housemates, family, a book club, a camping trip: someone always ends up keeping track of who
-		paid for what. Tab keeps that record for you. Everyone sees the shared bills, everyone sees
-		what they owe, and nobody has to send the "hey, just a reminder" text.
-	</p>
-
-	<div class="actions">
-		<a class="clay-button" href="/docs/self-host/">Run it yourself</a>
-		<a class="clay-button clay-button--soft" href="/pricing">See pricing</a>
-	</div>
-
-	<p class="note">
-		<strong>Tab is being built in the open.</strong> Version 0.1.0 is the foundation: it runs, but
-		you can't log expenses with it yet. Everything below is what it's for.
-	</p>
-
-	<h2>What it's for</h2>
-	<div class="shelf">
-		<section class="clay-surface">
-			<h3>Splitting bills</h3>
-			<p>
-				Evenly, by exact amounts, or the real-life way: "$70 off the top for the heater, then 60/40
-				for the rest."
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Reading bills for you</h3>
-			<p>
-				Forward the electric bill's email. Tab suggests the entry and the split; you tap to confirm.
-				Nothing is added without you.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Paying back in pieces</h3>
-			<p>Pay $40 now and $60 next week. The balance just goes down. No "partially settled" fuss.</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Keeping your spending yours</h3>
-			<p>
-				Log your own purchases next to the shared ones. Nobody else in the group can see them, not
-				even whoever set the group up.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Asking from Claude</h3>
-			<p>
-				Connect Tab to Claude Code or Claude Desktop and ask "what does Marcus owe me?" It runs on
-				your own Claude plan.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Taking your data with you</h3>
-			<p>Export everything to a spreadsheet, any time, on every plan.</p>
-		</section>
-	</div>
-
-	<h2>What it won't do</h2>
-	<ul class="plain">
-		<li>Show you ads. Not on the free plan, not ever.</li>
-		<li>Cap how many expenses you can log a day to push you into paying.</li>
-		<li>Sell or share your data.</li>
-		<li>Move money. Tab keeps the record; you pay people however you already do.</li>
-	</ul>
-
-	<h2>Two ways to have it</h2>
-	<div class="shelf">
-		<section class="clay-surface">
-			<h3>Run it yourself</h3>
-			<p>
-				Free, forever. One command on a spare computer or a cheap server, and the data never
-				leaves your hands. <a href="/docs/self-host/">How to run it</a>
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Let us host it</h3>
-			<p>
-				Not open yet. When it is, every new account gets 3 months of Plus free. After that there's a
-				free plan, and Plus, which reads your bills for you, is $10 a year. <a href="/pricing">See pricing</a>
-			</p>
-		</section>
-	</div>
+<Page title="Tab" description={page?.data.description || fallback}>
+	{
+		page ? (
+			<PageView page={page} />
+		) : (
+			<>
+				<h1>Tab</h1>
+				<p class="lede">{fallback}</p>
+				{Astro.locals.user && (
+					<p class="note">
+						There's no home page yet. <a href="/_emdash/admin/content/pages/new">Make a page</a> with
+						the slug "home" and publish it.
+					</p>
+				)}
+			</>
+		)
+	}
 </Page>

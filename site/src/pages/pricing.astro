@@ -1,117 +1,34 @@
 ---
+// The pricing page: the EmDash page with the slug "pricing". Plan cards come
+// from its `plans` block, which reads src/data/plans.ts.
+//
+// Each EmDash page gets its own small route file like this one, not a
+// catch-all `[slug].astro`: a catch-all would also catch /docs/, which belongs
+// to the prerendered Starlight docs.
+import { getEmDashEntry } from 'emdash';
+import PageView from '../components/PageView.astro';
 import Page from '../layouts/Page.astro';
+
+const { entry: page, cacheHint } = await getEmDashEntry('pages', 'pricing');
+if (Astro.cache?.enabled) Astro.cache.set(cacheHint);
+if (!page) Astro.response.status = 404;
 ---
 
-<Page
-	title="Pricing · Tab"
-	description="Tab's prices, in full: free to run yourself, a free hosted plan, Plus at $10 a year, and Pro at $24 a year."
->
-	<h1>Pricing</h1>
-	<p class="lede">A whole year of Tab Plus costs about what two months of Splitwise Pro do.</p>
-
-	<p class="note">
-		<strong>Hosted plans aren't open yet.</strong> These are the prices they'll open at. How many
-		bills each plan reads a month will be published here before anyone can sign up.
-	</p>
-
-	<h2>On every plan</h2>
-	<ul class="plain">
-		<li>Log as many expenses as you like. No daily limits.</li>
-		<li>Full history, balances, and settling up.</li>
-		<li>Export all your data to a spreadsheet, any time.</li>
-		<li>Ask from Claude Code or Claude Desktop, on your own Claude plan.</li>
-		<li>No ads. We never sell your data.</li>
-	</ul>
-
-	<h2>The plans</h2>
-	<div class="shelf shelf--pairs">
-		<section class="clay-surface">
-			<h3>Run it yourself</h3>
-			<p><strong>Free, forever.</strong></p>
-			<p class="muted">
-				Everything Tab does, on your own computer or server. Want it to read your bills? Add your
-				own AI key and pay the AI company directly.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Hosted free</h3>
-			<p><strong>$0. No card needed.</strong></p>
-			<p class="muted">
-				Everything except bill reading, hosted by us. Want bill reading? Add your own AI key, same as
-				running it yourself.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Plus</h3>
-			<p><strong>$10 a year.</strong></p>
-			<p class="muted">
-				Tab reads your bills for you. Forward them to your own Tab address, snap a receipt, or
-				upload a PDF. Have as many groups as you like (a house, a club, a trip), all on one plan.
-			</p>
-		</section>
-		<section class="clay-surface">
-			<h3>Pro</h3>
-			<p><strong>$24 a year.</strong></p>
-			<p class="muted">
-				For landlords and anyone billing other households. Everything in Plus, and: see what each
-				household owes you (or you owe them) in one place, pay back repair costs from there, and
-				split one bill across several properties. Your households don't pay anything.
-			</p>
-		</section>
-	</div>
-
-	<h2>Try Plus free</h2>
-	<p>
-		Every new account gets 3 months of Plus, free. No card needed. When it's up, your account goes
-		back to free unless you ask for more.
-	</p>
-	<p>
-		Trial bill reading is best-effort: a smaller monthly limit, and members' bills are read first,
-		so yours may take a little longer.
-	</p>
-	<p>
-		Want more? Just ask. We'll ask you one question, like what you use Tab for, and add 6 more
-		months. Ask again when those run out. Later we might ask whether you'd write a few words about
-		Tab that we can share. It doesn't have to be nice, and if we share it, we'll say you got free
-		months.
-	</p>
-
-	<h2>If you read a lot of bills</h2>
-	<p>
-		Plus and Pro members get a much higher monthly limit than the trial, far more than a busy
-		household needs, and their bills are read first. We tell you before you reach it. If you do, bill reading pauses until next month. You can
-		still type expenses in yourself, and nothing else stops.
-	</p>
-	<p>We never charge extra. There's no meter and no surprise bill.</p>
-
-	<h2>Bring a friend, get free months</h2>
-	<p>Share your link. For each person who joins:</p>
-	<ul class="plain">
-		<li><strong>1 month</strong> of Plus when they sign up,</li>
-		<li><strong>3 more months</strong> if they get Plus,</li>
-		<li><strong>a whole year</strong> if they get Pro.</li>
-	</ul>
-	<p class="muted">
-		Already paying? Your next renewal just moves back. Sign-up months top out at 12 a year; the
-		others don't.
-	</p>
-
-	<h2>Give someone half a year</h2>
-	<p>
-		Once a year, Plus and Pro members can give someone 6 months of Plus. They don't need a card, and
-		when the 6 months are up, their account goes back to free. Nothing renews, and nobody gets
-		charged.
-	</p>
-
-	<h2>Why it costs this little</h2>
-	<p>
-		Reading a bill with AI costs us a fraction of a cent, and Tab receives your forwarded bills
-		itself, with no email company in the middle. What actually costs money is the server and the
-		fee on each payment. The prices cover those, not a big margin. We charge once a year so that
-		payment fee doesn't eat a small price.
-	</p>
-	<p>
-		Tab is also free software. If a plan doesn't suit you, you can run the same thing yourself,
-		for free, with your data.
-	</p>
+<Page title="Pricing · Tab" description={page?.data.description ?? ''}>
+	{
+		page ? (
+			<PageView page={page} />
+		) : (
+			<>
+				<h1>Pricing</h1>
+				<p class="lede">This page isn't up yet.</p>
+				{Astro.locals.user && (
+					<p class="note">
+						<a href="/_emdash/admin/content/pages/new">Make a page</a> with the slug "pricing" and
+						publish it.
+					</p>
+				)}
+			</>
+		)
+	}
 </Page>

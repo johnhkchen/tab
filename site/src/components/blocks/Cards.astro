@@ -1,0 +1,29 @@
+---
+import { sanitizeHref } from 'emdash';
+import type { BlockComponentProps } from 'emdash/ui';
+import type { PageContentBlock } from '../../../emdash-env';
+
+type Props = BlockComponentProps<Extract<PageContentBlock, { _type: 'cards' }>>;
+
+const { headline, wide, cards } = Astro.props.value;
+---
+
+{headline && <h2>{headline}</h2>}
+<div class:list={['shelf', { 'shelf--pairs': wide }]}>
+	{
+		cards.map((card) => (
+			<section class="clay-surface">
+				<h3>{card.title}</h3>
+				<p>
+					{card.body}
+					{card.link_label && card.link_url && (
+						<>
+							{' '}
+							<a href={sanitizeHref(card.link_url)}>{card.link_label}</a>
+						</>
+					)}
+				</p>
+			</section>
+		))
+	}
+</div>

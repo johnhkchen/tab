@@ -1,0 +1,5 @@
+---
+// The "home" page lives at /, not /home. Keep the query string so the admin's
+// preview links still work.
+return Astro.redirect(`/${Astro.url.search}`, 301);
+---

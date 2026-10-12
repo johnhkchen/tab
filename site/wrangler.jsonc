@@ -1,8 +1,28 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	// Static files only: no Worker code runs. `mise run site:deploy` publishes dist/.
+	// One Worker: EmDash renders the landing and pricing pages from D1 on request;
+	// the prerendered docs and other files are served as static assets.
+	// `mise run site:deploy` builds and publishes.
 	"name": "tab-site",
+	"main": "./src/worker.ts",
 	"compatibility_date": "2026-10-01",
+	"compatibility_flags": ["nodejs_compat"],
 	"routes": [{ "pattern": "tab.b28.dev", "custom_domain": true }],
-	"assets": { "directory": "./dist", "not_found_handling": "404-page" }
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "tab-site",
+			"database_id": "473087d4-44bf-4a31-9ff2-a934f05ecbdc",
+		},
+	],
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "tab-site-media",
+		},
+	],
+	// EmDash runs scheduled publishing and upkeep from this cron.
+	"triggers": {
+		"crons": ["* * * * *"],
+	},
 }

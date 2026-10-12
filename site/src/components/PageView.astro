@@ -1,0 +1,31 @@
+---
+// One EmDash page: its blocks, or a short note when it has none yet.
+import type { ContentEntry } from 'emdash';
+import type { Page } from '../../emdash-env';
+import PageBlocks from './PageBlocks.astro';
+
+interface Props {
+	page: ContentEntry<Page>;
+}
+
+const { page } = Astro.props;
+const blocks = page.data.content ?? [];
+---
+
+{
+	blocks.length > 0 ? (
+		<div {...page.edit.content}>
+			<PageBlocks value={blocks} />
+		</div>
+	) : (
+		<>
+			<h1 {...page.edit.title}>{page.data.title}</h1>
+			{Astro.locals.user && (
+				<p class="note">
+					This page is empty. <a href={`/_emdash/admin/content/pages/${page.data.id}`}>Add some blocks</a>,
+					then publish.
+				</p>
+			)}
+		</>
+	)
+}

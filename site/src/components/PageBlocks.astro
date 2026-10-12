@@ -1,0 +1,30 @@
+---
+// Maps each block type in seed/seed.json to the component that draws it.
+import { Blocks, defineBlockComponents } from 'emdash/ui';
+import type { PageContentBlock } from '../../emdash-env';
+import Buttons from './blocks/Buttons.astro';
+import Cards from './blocks/Cards.astro';
+import Intro from './blocks/Intro.astro';
+import Note from './blocks/Note.astro';
+import Plans from './blocks/Plans.astro';
+import SmallPrint from './blocks/SmallPrint.astro';
+import Text from './blocks/Text.astro';
+
+interface Props {
+	value?: PageContentBlock[] | null;
+}
+
+const { value } = Astro.props;
+
+const components = defineBlockComponents<PageContentBlock>({
+	intro: Intro,
+	text: Text,
+	note: Note,
+	buttons: Buttons,
+	cards: Cards,
+	small_print: SmallPrint,
+	plans: Plans,
+});
+---
+
+<Blocks {value} {components} />

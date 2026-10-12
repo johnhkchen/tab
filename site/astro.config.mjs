@@ -1,16 +1,38 @@
 // @ts-check
-import { defineConfig } from 'astro/config';
+import cloudflare from '@astrojs/cloudflare';
+import react from '@astrojs/react';
 import starlight from '@astrojs/starlight';
+import { d1, r2 } from '@emdash-cms/cloudflare';
+import { defineConfig } from 'astro/config';
+import emdash from 'emdash/astro';
 
-// The public website for Tab: landing and pricing pages (src/pages) plus
-// Starlight docs under /docs (src/content/docs/docs). Builds to static files
-// in dist/, served by Cloudflare Workers (wrangler.jsonc).
+// The public website for Tab, one Cloudflare Worker (wrangler.jsonc):
+// - Landing and pricing pages are EmDash pages (D1 + R2), edited at
+//   /_emdash/admin and rendered on request by src/pages/index.astro and
+//   src/pages/[slug].astro. Seeded from seed/seed.json.
+// - Plan prices live in git (src/data/plans.ts), shown by the `plans` block.
+// - Docs are Starlight Markdown in git (src/content/docs/docs), prerendered.
 export default defineConfig({
 	site: 'https://tab.b28.dev',
+	output: 'server',
+	adapter: cloudflare(),
 	integrations: [
+		react(),
+		emdash({
+			database: d1({ binding: 'DB', session: 'auto' }),
+			storage: r2({ binding: 'MEDIA' }),
+			// No outside calls: no daily npm version check, and no Google Fonts
+			// download for the admin (it falls back to system fonts).
+			updateCheck: false,
+			fonts: false,
+			// English-only admin keeps the Worker bundle smaller.
+			admin: { locales: ['en'] },
+		}),
 		starlight({
 			title: 'Tab',
 			description: 'Keeps the running tab for your house, so nobody has to.',
+			// Docs stay static files even though the rest of the site is on-demand.
+			prerender: true,
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/johnhkchen/tab' }],
 			customCss: [
 				'@fontsource-variable/lora',
@@ -26,4 +48,5 @@ export default defineConfig({
 			],
 		}),
 	],
+	devToolbar: { enabled: false },
 });
