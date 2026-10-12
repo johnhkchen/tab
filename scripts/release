@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 version=$(scripts/version-check)
 tag="v$version"
 
-[[ -z "$(git status --porcelain)" ]] || { echo "working tree isn't clean; commit first" >&2; exit 1; }
+[[ -z "$(git status --porcelain --untracked-files=no)" ]] || { echo "uncommitted changes to tracked files; commit first" >&2; exit 1; }
 [[ "$(git branch --show-current)" == "main" ]] || { echo "release from main" >&2; exit 1; }
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
   echo "$tag already exists; bump the version first" >&2
