@@ -2,16 +2,6 @@
 
 What changed in each version of Tab, newest first.
 
-## Unreleased
-
-### Added
-- The public website in `site/`: a landing page, a pricing page that states the
-  full formula, and docs for running Tab yourself and how privacy is kept.
-
-### Changed
-- You edit the landing and pricing pages in EmDash now, at `/_emdash/admin`, not in code.
-  Plan prices stay in `site/src/data/plans.ts`, and the docs stay in Markdown.
-
 ## [0.1.0] - 2026-10-12
 
 The foundation. Nothing to log expenses with yet; everything the ledger will stand on.
@@ -25,3 +15,11 @@ The foundation. Nothing to log expenses with yet; everything the ledger will sta
 - The extraction service, written in BAML, with no database access at all.
 - `/healthz` reports the database and the extraction service.
 - `mise install` sets up the whole toolchain; `mise run check` is the CI gate.
+- `compose.yaml` is safe on a server that runs other things: Postgres has no open
+  port and no internet access, `extract` can't reach it, and every container runs
+  as a non-root user with a read-only filesystem and no extra privileges.
+- The public website at tab.b28.dev: a landing page, a pricing page with every
+  plan's price and rules, and docs for running Tab yourself and how privacy is
+  kept. You edit the pages in EmDash at `/_emdash/admin`, which only the
+  maintainer can open. Plan prices stay in `site/src/data/plans.ts`, and the docs
+  stay in Markdown.
