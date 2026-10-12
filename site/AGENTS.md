@@ -19,13 +19,15 @@
 ## Deploying
 
 `wrangler.jsonc` points at the real D1 database `tab-site` and R2 bucket `tab-site-media`.
-`mise run site:deploy` runs the checks, builds, and deploys. The first time:
+`mise run site:deploy` runs the checks, builds, and deploys with the project's Cloudflare token
+from Doppler (`tab/prd`). The CMS admin (`/_emdash/*`) sits behind Cloudflare Access: only the
+maintainer's email gets in, by one-time code. `mise run access:apply` (re)creates that lock;
+run it before the first deploy. The first time:
 
 1. Deploy. Wrangler creates the `SESSION` KV namespace (admin sign-in sessions) by itself.
-2. Straight away, open https://tab.b28.dev/_emdash/admin. Until someone finishes the setup
-   wizard, anyone who opens it can become the admin. Run it on the real domain (passkeys are
-   tied to it), create your admin account, and choose to include the sample content: that loads
-   the home and pricing pages from `seed/seed.json`.
+2. Open https://tab.b28.dev/_emdash/admin, pass the Access email code, and finish EmDash's
+   setup on the real domain (passkeys are tied to it). Choose to include the sample content:
+   that loads the home and pricing pages from `seed/seed.json`.
 3. Secrets come from Doppler (project `tab`), synced to the Worker or set with
    `wrangler secret put`, never from `.env` files. Nothing is required today.
    `EMDASH_ENCRYPTION_KEY` (make one with `pnpm exec emdash secrets generate`) is only needed if

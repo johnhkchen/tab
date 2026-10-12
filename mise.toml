@@ -110,10 +110,10 @@ dir = "site"
 run = "pnpm seed"
 
 [tasks."site:deploy"]
-description = "Publish the website to Cloudflare Workers (needs `wrangler login`; first-deploy steps in site/AGENTS.md)"
+description = "Publish the website to Cloudflare Workers with the project token from Doppler prd (first-deploy steps in site/AGENTS.md)"
 depends = ["check:site"]
 dir = "site"
-run = "pnpm deploy"
+run = "doppler run --project tab --config prd -- pnpm deploy"
 
 [tasks.up]
 description = "Build and run the whole self-hosted stack, exactly as a self-hoster would"
