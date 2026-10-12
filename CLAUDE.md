@@ -33,7 +33,8 @@ Context gets compacted; these files don't. Treat them as the source of truth.
 
 ## Commands
 
-`mise run check` is the CI gate. Run it before calling work done. `mise tasks` lists all.
+`mise run check` is the CI gate. Run it before calling work done, plus
+`mise run check:narrow` after changing any page (CI runs both). `mise tasks` lists all.
 
 ## Rules that aren't obvious from the code
 

@@ -36,6 +36,7 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-}
       PHX_HOST: ${PHX_HOST:-localhost}
       EXTRACT_URL: http://extract:4100
+      TAB_CURRENCY: ${TAB_CURRENCY:-USD}
       # Mail: Resend, or any SMTP service; with neither, emails go to the log.
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       SMTP_HOST: ${SMTP_HOST:-}

@@ -22,19 +22,12 @@ defmodule Tab.Accounts.UserNotifier do
   Deliver instructions to update a user email.
   """
   def deliver_update_email_instructions(user, url) do
-    deliver(user.email, "Update email instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can change your email by visiting the URL below:
+    deliver(user.email, "Confirm your new email for Tab", """
+    To use this address for Tab, open this link:
 
     #{url}
 
-    If you didn't request this change, please ignore this.
-
-    ==============================
+    If you didn't ask to change your email, ignore this and nothing changes.
     """)
   end
 
@@ -49,36 +42,22 @@ defmodule Tab.Accounts.UserNotifier do
   end
 
   defp deliver_magic_link_instructions(user, url) do
-    deliver(user.email, "Log in instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can log into your account by visiting the URL below:
+    deliver(user.email, "Your link to sign in to Tab", """
+    Open this link to sign in to Tab. It works once, for 15 minutes:
 
     #{url}
 
-    If you didn't request this email, please ignore this.
-
-    ==============================
+    If you didn't ask to sign in, ignore this. Nobody gets in without the link.
     """)
   end
 
   defp deliver_confirmation_instructions(user, url) do
-    deliver(user.email, "Confirmation instructions", """
-
-    ==============================
-
-    Hi #{user.email},
-
-    You can confirm your account by visiting the URL below:
+    deliver(user.email, "Your link to start using Tab", """
+    Open this link to finish making your Tab account. It works once, for 15 minutes:
 
     #{url}
 
-    If you didn't create an account with us, please ignore this.
-
-    ==============================
+    If you didn't ask for this, ignore it. Nobody can use the account without the link.
     """)
   end
 end

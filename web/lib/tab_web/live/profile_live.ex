@@ -36,7 +36,7 @@ defmodule TabWeb.ProfileLive do
 
         <.card title="How to pay you">
           <p class="mb-4 text-ink-soft">
-            Shown when someone settles up with you, so they don't have to ask.
+            Whoever settles up with you sees these, so they don't have to ask.
           </p>
           <div
             :for={{method, i} <- Enum.with_index(@methods)}

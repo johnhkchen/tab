@@ -28,7 +28,7 @@ config :tab,
 config :tab, Oban,
   engine: Oban.Engines.Basic,
   repo: Tab.Repo,
-  queues: [default: 10]
+  queues: [default: 10, mail: 5]
 
 # Where the BAML extraction service listens (extract/).
 config :tab, :extract_url, "http://localhost:4100"

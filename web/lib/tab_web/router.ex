@@ -43,6 +43,8 @@ defmodule TabWeb.Router do
 
       live_dashboard "/dashboard", metrics: TabWeb.Telemetry
       forward "/mailbox", Plug.Swoosh.MailboxPreview
+      # Every page at 360 px, signed in as a demo person (`mise run check:narrow`).
+      get "/narrow", TabWeb.Dev.NarrowController, :show
     end
   end
 

@@ -133,19 +133,27 @@
     height: 1.15rem;
     accent-color: var(--clay-primary);
   }
-  .clay-button--warn {
-    background: var(--tab-warn);
-  }
-  .clay-button:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    transform: none;
-  }
   a.clay-button,
   a.clay-chip {
     display: inline-block;
     text-decoration: none;
   }
+}
+
+/* Outside any layer, like the kit itself, so these win over its .clay-button. */
+.clay-button--warn {
+  background: var(--tab-warn);
+}
+.clay-button--warn:hover {
+  background: color-mix(in srgb, var(--tab-warn) 90%, #fff);
+}
+.clay-button--warn:active {
+  background: color-mix(in srgb, var(--tab-warn) 85%, var(--clay-ink));
+}
+.clay-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
 }
 
 /* Add variants based on LiveView classes */

@@ -16,7 +16,7 @@ defmodule Tab.Ledger do
 
   alias Tab.Accounts.Scope
   alias Tab.Ledger.{AuditEntry, Expense, Payment, Split}
-  alias Tab.Repo
+  alias Tab.{Notifications, Repo}
 
   @deferred "expenses_shares_add_up, expense_shares_add_up"
 
@@ -50,25 +50,42 @@ defmodule Tab.Ledger do
   def create_expense(%Scope{} = scope, group_id, attrs) do
     changeset = Expense.changeset(%Expense{group_id: group_id}, attrs)
 
-    with {:ok, shares} <- split(changeset) do
-      as_user(scope, fn ->
-        with {:ok, expense} <- Repo.insert(changeset) do
-          write_shares(expense.id, shares)
-        end
-      end)
+    with {:ok, shares} <- split(changeset),
+         {:ok, expense} <-
+           as_user(scope, fn ->
+             with {:ok, expense} <- Repo.insert(changeset), do: write_shares(expense.id, shares)
+           end) do
+      Notifications.expense_added(scope, expense)
+      {:ok, expense}
     end
   end
 
   @doc "Edits an expense and re-splits it. Balances recompute; the edit shows in history."
   def update_expense(%Scope{} = scope, id, attrs) do
-    as_user(scope, fn ->
-      with {:ok, expense} <- found(Repo.get(Expense, id)),
-           changeset = Expense.changeset(expense, attrs),
-           {:ok, shares} <- split(changeset),
-           {:ok, expense} <- update(changeset) do
-        write_shares(expense.id, shares)
-      end
-    end)
+    result =
+      as_user(scope, fn ->
+        with {:ok, before} <-
+               found(Repo.one(from e in Expense, where: e.id == ^id, preload: :shares)),
+             changeset = Expense.changeset(before, attrs),
+             {:ok, shares} <- split(changeset),
+             {:ok, expense} <- update(changeset),
+             {:ok, expense} <- write_shares(expense.id, shares) do
+          {:ok, {before, expense}}
+        end
+      end)
+
+    with {:ok, {before, expense}} <- result do
+      if money_changed?(before, expense), do: Notifications.expense_changed(scope, expense)
+      {:ok, expense}
+    end
+  end
+
+  defp money_changed?(before, after_) do
+    shares = fn e ->
+      e.shares |> Enum.map(&{&1.user_id, &1.counterparty_id, &1.amount_cents}) |> Enum.sort()
+    end
+
+    before.amount_cents != after_.amount_cents or shares.(before) != shares.(after_)
   end
 
   @doc "Removes an expense from balances. It stays in the history."
@@ -120,11 +137,17 @@ defmodule Tab.Ledger do
   def record_payment(%Scope{} = scope, group_id, attrs) do
     changeset = Payment.changeset(%Payment{group_id: group_id}, attrs)
 
-    as_user(scope, fn ->
-      with {:ok, payment} <- Repo.insert(changeset) do
-        {:ok, Repo.get!(Payment, payment.id)}
-      end
-    end)
+    result =
+      as_user(scope, fn ->
+        with {:ok, payment} <- Repo.insert(changeset) do
+          {:ok, Repo.get!(Payment, payment.id)}
+        end
+      end)
+
+    with {:ok, payment} <- result do
+      Notifications.payment_pending(scope, payment)
+      {:ok, payment}
+    end
   end
 
   @doc "The payee confirms a pending payment."

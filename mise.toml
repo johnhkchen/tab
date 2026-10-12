@@ -131,6 +131,11 @@ cp "$kit" site/src/styles/b28-clay.css
 echo "vendored $(wc -c < "$kit" | tr -d ' ') bytes into web/ and site/"
 """
 
+[tasks."check:narrow"]
+description = "Every app page at 360 px wide, in headless Chrome: fail on sideways scrolling"
+depends = ["db"]
+run = "scripts/check-narrow"
+
 [tasks."version:check"]
 description = "Fail unless every place that names the version agrees"
 run = "scripts/version-check"

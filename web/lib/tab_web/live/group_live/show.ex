@@ -66,7 +66,7 @@ defmodule TabWeb.GroupLive.Show do
               <span>
                 <strong>{GroupData.name(@data, b.debtor)}</strong>
                 {if b.debtor == {:user, @data.me}, do: "owe", else: "owes"}
-                <strong>{GroupData.name(@data, b.creditor)}</strong>
+                <strong>{GroupData.name_mid(@data, b.creditor)}</strong>
               </span>
               <.money cents={b.amount_cents} class="font-semibold" />
             </div>
@@ -84,14 +84,14 @@ defmodule TabWeb.GroupLive.Show do
             <ul class="divide-y divide-line">
               <li :for={b <- rows} class="flex justify-between gap-4 py-2">
                 <span>
-                  {GroupData.name(@data, b.debtor)} → {GroupData.name(@data, b.creditor)}
+                  {GroupData.name(@data, b.debtor)} → {GroupData.name_mid(@data, b.creditor)}
                 </span>
                 <.money cents={b.amount_cents} />
               </li>
             </ul>
           </div>
           <p class="text-sm text-ink-soft">
-            Payments count toward a category only when they were tagged with it.
+            A payment counts here only if whoever recorded it picked the category.
           </p>
         </div>
       </.card>

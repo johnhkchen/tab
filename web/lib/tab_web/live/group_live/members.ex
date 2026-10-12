@@ -72,7 +72,7 @@ defmodule TabWeb.GroupLive.Members do
           />
           <.button variant="soft" phx-click={JS.dispatch("tab:copy", to: "#invite-link")}>Copy link</.button>
           <p class="text-sm text-ink-soft">
-            This is the only time the link is shown. Make another any time.
+            You'll see this link only once. Make another any time.
           </p>
         </div>
         <.button phx-click="invite">Make an invite link</.button>

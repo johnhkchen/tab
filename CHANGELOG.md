@@ -5,8 +5,6 @@ What changed in each version of Tab, newest first.
 ## [Unreleased]
 
 ### Added
-- Sign in with an emailed link (a password is optional). Sending mail in
-  production comes in the next phase; until then links only reach the dev mailbox.
 - The ledger, kept honest by the database itself: groups, invites, members,
   counterparties (a landlord, a utility, the household next door), categories,
   expenses split equally, exactly, by percentage, by shares, or with fixed
@@ -21,7 +19,17 @@ What changed in each version of Tab, newest first.
 - Admins can archive a group: it stays readable but nothing in it changes until
   they unarchive it.
 - A history of every change, written by the database, that nobody can edit.
-- No screens yet: this is the layer the web app will stand on.
+- The web app: your groups, each group's balances (overall and by category),
+  adding and editing expenses with everyone's share shown as you type, each
+  expense's history, settling up with confirmation, invite links, people
+  outside the group, your name and how to pay you, and a CSV of everything
+  you're part of. It fits a phone screen.
+- Signing in and signing up are one step: type your email, open the link.
+- Emails when an expense you're in is added or its amount changes, and when a
+  payment to you needs confirming.
+- Email goes through Resend or any SMTP service you set up. With neither,
+  emails (sign-in links included) go to the app's log.
+- Pick your currency with `TAB_CURRENCY` (default `USD`).
 
 ## [0.1.0] - 2026-10-12
 

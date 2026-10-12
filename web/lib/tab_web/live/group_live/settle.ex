@@ -25,7 +25,7 @@ defmodule TabWeb.GroupLive.Settle do
             <span>
               <strong>{GroupData.name(@data, s.from)}</strong>
               {if s.from == {:user, @data.me}, do: "pay", else: "pays"}
-              <strong>{GroupData.name(@data, s.to)}</strong>
+              <strong>{GroupData.name_mid(@data, s.to)}</strong>
               <.money cents={s.amount_cents} class="font-semibold" />
             </span>
             <.button

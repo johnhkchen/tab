@@ -34,8 +34,12 @@ mise install       # Erlang, Elixir, and BAML, at the pinned versions
 mise run setup     # start Postgres, fetch dependencies, create the database
 mise run dev       # web app on :4000, extraction service on :4100
 mise run site:dev  # the public website, with live reload and its pages filled in
-mise run check     # everything CI checks; green here means green there
+mise run check         # the tests and builds CI runs
+mise run check:narrow  # every page at phone width, in headless Chrome (also in CI)
 ```
+
+`mise run setup` loads demo data: sign in as `priya@example.com` and open the
+link from <http://localhost:4000/dev/mailbox>.
 
 `mise tasks` lists the rest.
 

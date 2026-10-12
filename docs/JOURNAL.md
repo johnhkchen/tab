@@ -32,6 +32,16 @@ this repo), **Gotchas**, **Next**.
   `Tab.Ledger` (all through `Tab.DBError.as_user/2`). Tests: policy matrix,
   ledger rules, split properties (StreamData), contexts. 227 web tests.
 
+- **Phase 2 built** (unreleased): mail through Resend, SMTP, or the log;
+  daisyUI removed and every page restyled on the clay kit with self-hosted
+  fonts; one-field sign-in that also signs up; welcome, groups, group, add and
+  edit expense (live share preview for every split type), expense with
+  history, settle up, people, join, you, CSV export; email notifications as
+  Oban jobs written as the recipient; page tests, two full journeys,
+  colors-only-from-the-kit, and `mise run check:narrow` (every page at 360 px
+  in headless Chrome, also a CI job). Demo data in `priv/repo/seeds.exs`.
+  256 web tests.
+
 ### Decided
 - **Stack:** Elixir/Phoenix + Postgres RLS; BAML Language as its own service;
   `mise` for tools and tasks (no justfile).
@@ -67,6 +77,12 @@ this repo), **Gotchas**, **Next**.
   first if money's owed. Built into the ledger migrations (unreleased, so
   edited in place) with tests. Two holes found on the way: payments with a
   former member couldn't be recorded, and archived groups were still writable.
+- **No Clerk.** Asked mid-phase-2; answered no: self-hosters would need a
+  Clerk account, sign-ins would pass through a third party, and RLS keys on
+  Tab's own `users.id`. `phx.gen.auth` stays; Google sign-in and passkeys are on
+  the roadmap as a later phase, built in Phoenix.
+- **Sign-up is sign-in.** The registration page is gone: a new email gets an
+  account when it asks for a link, with the same reply as a known email.
 - **Outbound mail:** Resend (Swoosh's Resend adapter), "for now, at least until
   there's a problem." Generic SMTP for self-hosters who want it; with neither,
   sign-in links go to the server log. Wired up in phase 2. Until then, prod
@@ -113,6 +129,15 @@ this repo), **Gotchas**, **Next**.
   re-run the failed job.
 - EmDash's catch-all `[slug].astro` route breaks Starlight's `/docs/`. Each EmDash
   page needs its own small route file in `site/src/pages/`.
+- Headless Chrome with `--dump-dom` never exits on a LiveView page (the live
+  connection keeps it busy). `/dev/narrow` frames pages in sandboxed iframes
+  (no scripts run), and `scripts/check-narrow` wraps Chrome in `timeout 45`.
+- The clay kit's classes are unlayered CSS, so they beat anything in Tailwind's
+  `@layer components`. Overrides of `.clay-button` go outside any layer.
+- zsh doesn't split an unquoted `$var` into words: `env $vars cmd` passes one
+  variable. Use `${=vars}`.
+- `mix phx.gen.auth`'s generated tests assert exact wording; rewording the
+  pages means updating them (done once for phase 2).
 - `INSERT ... RETURNING` on `groups` fails RLS: the select policy is checked
   before the AFTER trigger adds the creator's membership. Ids come from Ecto, so
   don't add `read_after_writes` there.
@@ -127,8 +152,8 @@ this repo), **Gotchas**, **Next**.
   `check_function_bodies = off` because helpers refer to tables made later.
 
 ### Next
-- Start **phase 2** from `docs/specification.md`: wire Resend (and SMTP, and
-  log-only) into `config/runtime.exs` first, since sign-in needs mail; then the
-  pages, restyled on the clay kit with daisyUI removed.
-- Phase 2 pages for the decisions above: an "edited" mark on expenses, the
-  edit email, the archive warning, and a clear "settle up first" message.
+- Release **v0.2.0** (phases 1 and 2): `mise run release`, then deploy the
+  website so the self-host docs' new Email section goes live with it.
+- Set up Resend for Cloud when hosting starts: verify the sending domain in
+  Cloudflare DNS, put `RESEND_API_KEY` in Doppler `tab/prd`.
+- Specify phase 3 (recurring bills) from `working_specification.md`.

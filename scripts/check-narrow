@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Checks every app page at 360 px wide (phone width) for sideways scrolling.
+#
+# Starts the dev server on a spare port with the demo seed data, opens
+# /dev/narrow in headless Chrome (each page in a 360 px frame), and fails if
+# any page is wider than its frame. Needs Postgres (mise run db) and Chrome.
+#   mise run check:narrow            # check
+#   SHOTS=path.png mise run check:narrow   # also save a screenshot of every page
+set -euo pipefail
+cd "$(dirname "$0")/../web"
+
+PORT=${NARROW_PORT:-48123}
+chrome=$(command -v google-chrome || command -v chromium || command -v chromium-browser ||
+  echo "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+[[ -x $chrome ]] || { echo "check-narrow: no Chrome found" >&2; exit 1; }
+
+export MIX_ENV=dev
+mix assets.setup >/dev/null
+mix ecto.create --quiet >/dev/null
+mix ecto.migrate --quiet >/dev/null
+mix run priv/repo/seeds.exs >/dev/null 2>&1
+
+log=$(mktemp)
+profile=$(mktemp -d)
+PORT=$PORT mix phx.server >"$log" 2>&1 &
+server=$!
+trap 'kill $server 2>/dev/null; rm -rf "$profile"' EXIT
+
+for _ in $(seq 1 90); do
+  curl -fsS "localhost:$PORT/healthz" >/dev/null 2>&1 && break
+  sleep 1
+done
+curl -fsS "localhost:$PORT/healthz" >/dev/null || { cat "$log"; exit 1; }
+
+# Headless Chrome writes the page out but doesn't always exit afterwards, so
+# each run gets a time limit; the report is complete by then.
+report=$(timeout 45 "$chrome" --headless=new --disable-gpu --no-sandbox --user-data-dir="$profile" \
+  --virtual-time-budget=10000 --dump-dom "http://localhost:$PORT/dev/narrow" 2>/dev/null |
+  sed -n '/<pre id="report">/,/<\/pre>/p' | sed 's/<[^>]*>//g' || true)
+
+if [[ -n ${SHOTS:-} ]]; then
+  timeout 45 "$chrome" --headless=new --disable-gpu --no-sandbox --hide-scrollbars --user-data-dir="$profile" \
+    --virtual-time-budget=10000 --window-size=1580,2450 --screenshot="$SHOTS" \
+    "http://localhost:$PORT/dev/narrow?shots=1" 2>/dev/null || true
+  echo "screenshot: $SHOTS"
+fi
+
+echo "$report"
+grep -q '^done$' <<<"$report" || { echo "check-narrow: the report never finished" >&2; exit 1; }
+! grep -q '^TOO WIDE' <<<"$report"

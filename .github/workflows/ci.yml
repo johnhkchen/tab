@@ -38,6 +38,33 @@ jobs:
       # Postgres comes from the service container above, so skip the local `db` task.
       - run: "mise run --skip-deps check:web ::: check:extract ::: version:check"
 
+  narrow:
+    name: pages fit a 360 px phone
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: actions/cache@v6
+        with:
+          path: |
+            web/deps
+            web/_build
+          key: mix-dev-${{ runner.os }}-${{ hashFiles('mise.toml', 'web/mix.lock') }}
+          restore-keys: mix-dev-${{ runner.os }}-
+      - run: mix deps.get
+        working-directory: web
+      # Postgres comes from the service container; Chrome is on the runner image.
+      - run: mise run --skip-deps check:narrow
+
   site:
     name: website builds
     runs-on: ubuntu-24.04

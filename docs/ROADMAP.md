@@ -26,7 +26,7 @@ counterparties, private expenses, and the audit log, each with row-level securit
 policies per verb. Exit: the direct-database bypass tests pass for every table.
 Spec: [specification.md §Phase 1](specification.md#phase-1-the-ledger-enforced-by-the-database).
 
-## Phase 2: The web app people use (next)
+## Phase 2: The web app people use (done, unreleased, 2026-10-12)
 
 Sign-in, groups, adding expenses, balances (overall and per category), settling up
 with confirmation, payment methods, CSV export, and email notifications.
@@ -52,6 +52,13 @@ webhooks (decided when phase 4 is specified; no in-app mail server).
 A remote MCP server with OAuth (Boruta), so people can log expenses and check
 balances from Claude Code or Claude Desktop on their own subscription. Every tool
 call runs as the signed-in person through the same row-level security.
+
+## Sign in with Google, and passkeys (later)
+
+More ways in, built inside Phoenix rather than through a hosted sign-in service
+(Clerk and similar were considered and passed over: self-hosters would need an
+account with them, and every privacy rule keys on Tab's own user ids). The
+emailed link stays the default.
 
 ## Phase 6: Hosted Tab (later)
 

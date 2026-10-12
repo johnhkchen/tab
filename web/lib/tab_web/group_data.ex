@@ -59,6 +59,15 @@ defmodule TabWeb.GroupData do
 
   def name_user(data, id), do: name(data, {:user, id})
 
+  @doc "Like `name/2`, for the middle of a sentence: \"Sam owes you\"."
+  def name_mid(data, party) do
+    case name(data, party) do
+      "You" -> "you"
+      "A former member" -> "a former member"
+      name -> name
+    end
+  end
+
   def category_name(%__MODULE__{categories: cats}, id) do
     Enum.find_value(cats, fn c -> c.id == id && c.name end)
   end

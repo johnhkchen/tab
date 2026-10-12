@@ -262,7 +262,7 @@ wide with no sideways scrolling. Copy follows the brand voice and `stop-slop`.
 
 | Page | What you can do |
 |---|---|
-| Sign in | Get a magic link by email; follow it to sign in. First sign-in creates the account and asks for a display name. |
+| Sign in | One email field: Tab emails a link that works once, for 15 minutes. A new email gets an account made on the spot, and the reply is the same either way, so the page never reveals who has an account. The first sign-in asks for a display name (`/welcome`), then continues to wherever the person was headed, such as an invite link. A password is optional, under Email and password. |
 | Your groups | See your groups with your net balance in each; create a group. |
 | Group | Balances (who owes whom, overall and by category), recent activity, pending payments waiting on you. |
 | Add expense | Description, amount, date (defaults to today), category, who paid, who's in, and the split type. Shows each person's share live before saving. Can be marked private. |
@@ -271,12 +271,16 @@ wide with no sideways scrolling. Copy follows the brand voice and `stop-slop`.
 | Members and invites | Admins create, copy, and revoke invite links; see members; add counterparties. |
 | Join | Opening an invite link signs you in if needed, then joins the group. Used, expired, and revoked links say so plainly. |
 | Profile | Display name and payment methods (shown to people you share a group with). |
-| Export | Download a CSV of everything you can see that you're part of: your expenses, your shares, your payments, and your private expenses. |
+| Export | `GET /export.csv`: every expense you paid for or have a share in (private ones and deleted ones included, marked), and every payment to or from you, across all your groups, read as you. Cells starting with `=`, `+`, `-`, or `@` are prefixed so spreadsheets don't run them. |
 
 ### Email notifications
 
-- Sent by Swoosh from an Oban job, so a slow or failing mail service never blocks
-  a page.
+- Sent by Swoosh from an Oban job (queue `mail`), so a slow or failing mail
+  service never blocks a page. Jobs are enqueued after the ledger write commits,
+  as the connection owner, because people's own role can't touch the job table.
+- The job builds the email as its recipient, through `Repo.as_user/2`, so an
+  email can only contain what that person is allowed to see. Someone who has
+  left by the time the job runs gets nothing.
 - Three events: a new shared expense you're part of, a change to the amount or
   split of one you're part of, and a pending payment waiting for you to confirm.
 - One email per event, to the people involved, never to the person who caused it.
@@ -294,7 +298,10 @@ wide with no sideways scrolling. Copy follows the brand voice and `stop-slop`.
 3. A solo user's journey with only counterparties, with no invite ever sent.
 4. Notifications enqueue the right emails, and the app works with no mail
    settings at all.
-5. No hard-coded colors outside the clay kit tokens; pages pass at 360 px.
+5. No hard-coded colors outside the clay kit tokens (`test/tab_web/clay_tokens_test.exs`;
+   Tailwind's default palette is also switched off in `app.css`), and every page
+   fits 360 px with no sideways scrolling (`mise run check:narrow`, a CI job:
+   headless Chrome loads each page in a 360 px frame via the dev-only `/dev/narrow`).
 
 These cover the phase-2 items in the long-form spec's acceptance criteria:
 payment methods visible to group-mates, a payment storing its method and
