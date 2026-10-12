@@ -7,9 +7,22 @@
 # General application configuration
 import Config
 
+config :tab, :scopes,
+  user: [
+    default: true,
+    module: Tab.Accounts.Scope,
+    assign_key: :current_scope,
+    access_path: [:user, :id],
+    schema_key: :user_id,
+    schema_type: :binary_id,
+    schema_table: :users,
+    test_data_fixture: Tab.AccountsFixtures,
+    test_setup_helper: :register_and_log_in_user
+  ]
+
 config :tab,
   ecto_repos: [Tab.Repo],
-  generators: [timestamp_type: :utc_datetime]
+  generators: [timestamp_type: :utc_datetime, binary_id: true]
 
 # Background jobs (digests, recurrence detection). Queues are added as features land.
 config :tab, Oban,
