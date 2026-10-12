@@ -1,0 +1,33 @@
+/* Starlight in b28 clothes: map its theme variables onto the clay kit tokens. */
+:root {
+	--sl-font: var(--clay-font-body);
+	--sl-font-system: var(--clay-font-body);
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #dfe6f0;
+	--sl-color-accent: var(--clay-primary);
+	--sl-color-accent-high: #26395a;
+	--sl-color-white: var(--clay-ink);
+	--sl-color-black: var(--clay-bg);
+	--sl-color-bg-nav: var(--clay-surface-raised);
+	--sl-color-bg-sidebar: var(--clay-surface);
+	--sl-color-hairline: var(--clay-border);
+	--sl-color-hairline-light: var(--clay-border);
+	--sl-color-gray-2: #3a3431;
+	--sl-color-gray-3: var(--clay-ink-soft);
+}
+
+:root[data-theme='dark'] {
+	--sl-color-accent-low: #1d2a40;
+	--sl-color-accent: #8fa8d0;
+	--sl-color-accent-high: #dfe6f0;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+h1#_top,
+.site-title {
+	font-family: var(--clay-font-display);
+}

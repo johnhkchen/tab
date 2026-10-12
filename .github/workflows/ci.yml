@@ -38,6 +38,14 @@ jobs:
       # Postgres comes from the service container above, so skip the local `db` task.
       - run: mise run --skip-deps check:web ::: check:extract ::: version:check
 
+  site:
+    name: website builds
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - run: mise run check:site
+
   stack:
     name: docker compose up
     runs-on: ubuntu-24.04

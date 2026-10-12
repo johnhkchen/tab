@@ -1,0 +1,95 @@
+---
+import Page from '../layouts/Page.astro';
+---
+
+<Page
+	title="Pricing · Tab"
+	description="How Tab's pricing works, in full: free to run yourself, a free hosted plan, and paid plans that publish their exact formula."
+>
+	<h1>Pricing</h1>
+	<p class="lede">The whole formula, up front. No app-store guessing, no surprise bills.</p>
+
+	<p class="note">
+		<strong>Hosted plans aren't open yet,</strong> and the dollar amounts aren't set. This page shows
+		exactly how they'll be worked out. The amounts will be published here before anyone can sign
+		up.
+	</p>
+
+	<h2>On every plan</h2>
+	<ul class="plain">
+		<li>Log as many expenses as you like. No daily limits.</li>
+		<li>Full history, balances, and settling up.</li>
+		<li>Export all your data to a spreadsheet, any time.</li>
+		<li>Ask from Claude Code or Claude Desktop, on your own Claude plan.</li>
+		<li>No ads. We never sell your data.</li>
+	</ul>
+
+	<h2>The plans</h2>
+	<div class="shelf shelf--pairs">
+		<section class="clay-surface">
+			<h3>Run it yourself</h3>
+			<p><strong>Free, forever.</strong></p>
+			<p class="muted">
+				Everything Tab does, on your own computer or server. Want it to read your bills? Add your
+				own AI key and pay the AI company directly.
+			</p>
+		</section>
+		<section class="clay-surface">
+			<h3>Hosted free</h3>
+			<p><strong>$0. No card needed.</strong></p>
+			<p class="muted">
+				Everything except bill reading, hosted by us. Want bill reading? Add your own AI key, same as
+				running it yourself.
+			</p>
+		</section>
+		<section class="clay-surface">
+			<h3>Plus</h3>
+			<p><strong>For people in lots of groups.</strong></p>
+			<p class="muted">
+				Hosting and bill reading included. Have as many groups as you like (a house, a club, a
+				trip) on one plan, sharing one monthly reading allowance.
+			</p>
+		</section>
+		<section class="clay-surface">
+			<h3>Pro</h3>
+			<p><strong>For landlords and anyone billing other households.</strong></p>
+			<p class="muted">
+				Everything in Plus, and: see what each household owes you (or you owe them) in one place, pay
+				back repair costs from there, and split one bill across several properties. Your households
+				don't pay anything.
+			</p>
+		</section>
+	</div>
+
+	<h2>How Plus and Pro are charged</h2>
+	<p>Each month, you pay whichever is lower:</p>
+	<ul class="plain">
+		<li>a flat monthly fee, or</li>
+		<li>
+			what reading your bills actually cost us that month, plus <strong>10%</strong> on Plus or{' '}
+			<strong>8%</strong> on Pro.
+		</li>
+	</ul>
+	<p>If that comes to less than $3, we don't charge you for that month.</p>
+
+	<h2>When you reach your reading allowance</h2>
+	<p>
+		Each paid plan includes a monthly allowance of bills read for you. We tell you before you reach
+		it. When you do, reading pauses until next month. You can still type expenses in yourself;
+		nothing else stops.
+	</p>
+	<p>
+		If you'd rather keep reading, you can turn on <strong>extra reading</strong>. It's off unless you
+		switch it on. Extra bills cost the same as above (our cost plus 10% on Plus, plus 8% on Pro), and
+		you set a monthly spending limit. Reach that limit and reading pauses, same as before. You're
+		never charged past the limit you chose.
+	</p>
+
+	<h2>Why it's priced this way</h2>
+	<p>
+		Hosting Tab costs very little per household. Reading bills with AI is the cost that actually
+		grows. So we add a small, fixed margin on that, and you never pay more than the flat fee. Tab is
+		also free software: if a plan doesn't suit you, you can run the same thing yourself, for free,
+		with your data.
+	</p>
+</Page>

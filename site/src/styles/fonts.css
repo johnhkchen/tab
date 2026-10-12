@@ -1,0 +1,5 @@
+/* Self-hosted fonts (no Google requests); fontsource registers them as "* Variable". */
+:root {
+	--clay-font-display: 'Lora Variable', 'Lora', Georgia, serif;
+	--clay-font-body: 'Karla Variable', 'Karla', system-ui, -apple-system, sans-serif;
+}

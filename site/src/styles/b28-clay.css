@@ -1,0 +1,125 @@
+/*
+ * b28-clay.css — the b28.dev shared style kit.
+ *
+ * One framework-agnostic file (CSS custom properties + a few primitive classes) so every
+ * standalone frontend — RowClear (Next/React), Mahjong (Svelte), Consecutive (Lustre/Gleam) —
+ * reads as part of the same family as b28.dev, whatever it's built in. There is no shared
+ * component library across those stacks; the shared thing is this vocabulary of tokens + classes.
+ *
+ * Source of truth: served at https://b28.dev/kit/b28-clay.css. Each project VENDORS a copy at
+ * build time (offline single-file games can't link a stylesheet at runtime), so "propagate a
+ * change" = update this file, then `just sync-kit` + rebuild in each repo.
+ *
+ * The look: b28.dev's own warm palette (steel blue on off-white and cream, Lora/Karla),
+ * expressed as **sincere claymorphism** —
+ *   truthful: one light source (top-left); shadows are WARM (tinted by the ink color, not gray),
+ *             so surfaces read as real clay under real light. What looks pressable IS pressable —
+ *             a button that looks raised actually recesses when you press it.
+ *   sincere:  soft, tactile, unpretentious. No neon, no glass, no dark patterns. Generous radii,
+ *             calm motion, the parent site's colors — borrowed, not invented.
+ */
+
+:root {
+  /* ---- palette (from b28.dev's global.css — the parent brand) ---- */
+  --clay-primary: #44679b;              /* steel blue */
+  --clay-primary-strong: #3a5885;       /* pressed / active */
+  --clay-bg: #faf8f5;                   /* warm off-white — the page */
+  --clay-surface: #f2eee6;              /* warm clay — the material of raised things */
+  --clay-surface-raised: #f7f3eb;       /* a touch lighter, catches the top-left light */
+  --clay-well: #ece7dd;                 /* recessed surfaces (boards, inputs) */
+  --clay-border: #e4ded2;
+  --clay-ink: #1c1917;                  /* warm near-black text */
+  --clay-ink-soft: #736b66;             /* muted text */
+  --clay-on-primary: #ffffff;
+
+  /* ---- type (b28.dev) ---- */
+  --clay-font-display: "Lora", "Lora Fallback", Georgia, serif;
+  --clay-font-body: "Karla", "Karla Fallback", system-ui, -apple-system, sans-serif;
+
+  /* ---- radii — soft, a little larger than b28's cards so clay reads as inflated ---- */
+  --clay-radius-sm: 0.6rem;
+  --clay-radius: 1rem;
+  --clay-radius-lg: 1.5rem;
+  --clay-radius-pill: 9999px;
+
+  /* ---- the claymorphism recipe (warm-toned; one top-left light source) ---- */
+  /* raised: soft warm drop + inner top-left highlight + inner bottom-right shade */
+  --clay-shadow-raised:
+    0 14px 26px -10px color-mix(in srgb, var(--clay-ink) 20%, transparent),
+    inset 2px 2px 4px color-mix(in srgb, #ffffff 72%, transparent),
+    inset -3px -3px 7px color-mix(in srgb, var(--clay-ink) 9%, transparent);
+  /* pressed: the same body, recessed — inner shade top-left, highlight bottom-right */
+  --clay-shadow-pressed:
+    inset 3px 3px 7px color-mix(in srgb, var(--clay-ink) 14%, transparent),
+    inset -2px -2px 4px color-mix(in srgb, #ffffff 60%, transparent);
+  /* inset well: deeper recess for boards and inputs */
+  --clay-shadow-well:
+    inset 5px 5px 11px color-mix(in srgb, var(--clay-ink) 12%, transparent),
+    inset -4px -4px 9px color-mix(in srgb, #ffffff 66%, transparent);
+
+  /* ---- motion — calm, tactile press feedback ---- */
+  --clay-ease: cubic-bezier(0.2, 0, 0, 1);
+  --clay-press: transform 130ms var(--clay-ease), box-shadow 130ms var(--clay-ease),
+    background-color 130ms var(--clay-ease);
+}
+
+/* Opt-in scope: put `.b28-clay` (or the tokens) on a root element to inherit the base. */
+.b28-clay {
+  background-color: var(--clay-bg);
+  color: var(--clay-ink);
+  font-family: var(--clay-font-body);
+  -webkit-font-smoothing: antialiased;
+}
+.b28-clay h1, .b28-clay h2, .b28-clay h3 {
+  font-family: var(--clay-font-display);
+  color: var(--clay-ink);
+}
+
+/* ---- primitives (plain classes — usable from React, Svelte, Lustre, anything) ---- */
+
+/* A raised piece of clay: cards, panels, previews, HUD tiles. */
+.clay-surface {
+  background: var(--clay-surface-raised);
+  border-radius: var(--clay-radius);
+  box-shadow: var(--clay-shadow-raised);
+}
+
+/* A recessed well: game boards, tracks, inputs — things you look INTO. */
+.clay-well {
+  background: var(--clay-well);
+  border-radius: var(--clay-radius);
+  box-shadow: var(--clay-shadow-well);
+}
+
+/* A pressable button. Looks raised, lifts on hover, genuinely recesses on press. */
+.clay-button {
+  font-family: var(--clay-font-body);
+  font-weight: 600;
+  color: var(--clay-on-primary);
+  background: var(--clay-primary);
+  border: none;
+  border-radius: var(--clay-radius-pill);
+  padding: 0.7em 1.4em;
+  cursor: pointer;
+  box-shadow: var(--clay-shadow-raised);
+  transition: var(--clay-press);
+}
+.clay-button:hover { transform: translateY(-1px); background: color-mix(in srgb, var(--clay-primary) 92%, #fff); }
+.clay-button:active { transform: translateY(1px) scale(0.99); background: var(--clay-primary-strong); box-shadow: var(--clay-shadow-pressed); }
+.clay-button:focus-visible { outline: 3px solid color-mix(in srgb, var(--clay-primary) 45%, transparent); outline-offset: 2px; }
+
+/* A neutral (secondary) button — clay-colored, ink text. */
+.clay-button--soft { background: var(--clay-surface-raised); color: var(--clay-ink); }
+.clay-button--soft:active { background: var(--clay-well); }
+
+/* A small raised token — chips, badges, next/hold tiles. */
+.clay-chip {
+  background: var(--clay-surface-raised);
+  border-radius: var(--clay-radius-sm);
+  box-shadow: var(--clay-shadow-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .clay-button { transition: none; }
+  .clay-button:hover, .clay-button:active { transform: none; }
+}

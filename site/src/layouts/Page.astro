@@ -1,0 +1,46 @@
+---
+// Landing and pricing pages: the b28 clay kit, no Starlight chrome.
+import '@fontsource-variable/lora';
+import '@fontsource-variable/karla';
+import '../styles/b28-clay.css';
+import '../styles/fonts.css';
+import '../styles/page.css';
+
+interface Props {
+	title: string;
+	description: string;
+}
+
+const { title, description } = Astro.props;
+const path = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>{title}</title>
+		<meta name="description" content={description} />
+		<link rel="canonical" href={new URL(path, Astro.site)} />
+	</head>
+	<body class="b28-clay">
+		<header class="nav">
+			<a class="brand" href="/">Tab</a>
+			<nav aria-label="Main">
+				<a href="/pricing" aria-current={path.startsWith('/pricing') ? 'page' : undefined}>Pricing</a>
+				<a href="/docs/">Docs</a>
+				<a href="https://github.com/johnhkchen/tab">Code</a>
+			</nav>
+		</header>
+		<main>
+			<slot />
+		</main>
+		<footer class="footer">
+			<p>
+				Tab is free, open-source software (AGPL-3.0). No ads, no tracking, and we never sell your
+				data.
+			</p>
+		</footer>
+	</body>
+</html>

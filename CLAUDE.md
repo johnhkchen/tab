@@ -7,6 +7,8 @@ row-level security. Monorepo:
 - `extract/` — BAML Language service (not Python/TS BAML). Read
   `extract/.claude/skills/baml-core/SKILL.md` before writing BAML; v1 syntax differs from
   older BAML. Run it with `baml-cli` (pinned in mise.toml), not the `baml` wrapper.
+- `site/` — the public website (landing, `/pricing`, Starlight docs under `/docs`), static
+  on Cloudflare Workers. Not shipped with the app: self-hosted copies never show Cloud pricing.
 
 ## Commands
 
@@ -24,5 +26,7 @@ row-level security. Monorepo:
 - **Nothing in the ledger may require AI.** `/healthz` stays 200 when extract is down.
 - **Versions live in four places** (`web/mix.exs`, `extract/baml_src/main.baml`,
   `compose.yaml`, `CHANGELOG.md`); `mise run version:check` keeps them in step.
-- **UI uses the b28 clay kit** (`web/assets/vendor/b28-clay.css`, refresh with
+- **The pricing page must match the spec exactly** (spec §9): flat fee or cost +10%/+8%,
+  whichever is lower; under $3 not charged; extra reading off by default and capped.
+- **UI uses the b28 clay kit** (vendored in `web/` and `site/`; refresh both with
   `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`.

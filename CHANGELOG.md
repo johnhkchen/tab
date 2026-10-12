@@ -2,6 +2,12 @@
 
 What changed in each version of Tab, newest first.
 
+## Unreleased
+
+### Added
+- The public website in `site/`: a landing page, a pricing page that states the
+  full formula, and docs for running Tab yourself and how privacy is kept.
+
 ## [0.1.0] - 2026-10-12
 
 The foundation. Nothing to log expenses with yet; everything the ledger will stand on.

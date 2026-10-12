@@ -5,6 +5,9 @@ erlang = "28.5"
 elixir = "1.20.4-otp-28"
 # BAML Language toolchain for the extraction service (extract/). Pinned to a stable release.
 "github:BoundaryML/baml" = { version = "0.21.0", version_prefix = "baml-language-", bin = "baml-cli" }
+# The public website (site/): Astro + Starlight, deployed to Cloudflare Workers.
+node = "24.21.0"
+pnpm = "12.11.2"
 
 [settings]
 # Use precompiled Erlang instead of building from source (seconds, not half an hour).
@@ -17,6 +20,8 @@ BAML_AGENT_SKILL_CHECK = "off"
 # Bills and receipts flow through extraction; no vendor analytics or tracing.
 DO_NOT_TRACK = "1"
 BAML_TELEMETRY = "off"
+WRANGLER_SEND_METRICS = "false"
+ASTRO_TELEMETRY_DISABLED = "1"
 
 # ---------------------------------------------------------------------------
 # Tasks: `mise run <name>`. `mise run check` is the same gate CI runs.
@@ -61,8 +66,8 @@ dir = "extract"
 run = "baml-cli test"
 
 [tasks.check]
-description = "The CI gate: formatting, warnings-as-errors, versions in step, all tests"
-depends = ["check:web", "check:extract", "version:check"]
+description = "The CI gate: formatting, warnings-as-errors, versions in step, all tests, site builds"
+depends = ["check:web", "check:extract", "check:site", "version:check"]
 
 [tasks."check:web"]
 depends = ["db"]
@@ -83,17 +88,41 @@ run = [
   "baml-cli test",
 ]
 
+[tasks."check:site"]
+depends = ["site:deps"]
+dir = "site"
+run = ["pnpm check", "pnpm build", "pnpm deploy:check"]
+
+[tasks."site:deps"]
+dir = "site"
+run = "pnpm install --frozen-lockfile"
+
+[tasks."site:dev"]
+description = "Run the public website (landing, pricing, docs) with live reload"
+depends = ["site:deps"]
+dir = "site"
+run = "pnpm dev"
+
+[tasks."site:deploy"]
+description = "Publish the website to Cloudflare Workers (needs `wrangler login`)"
+depends = ["check:site"]
+dir = "site"
+run = "pnpm deploy"
+
 [tasks.up]
 description = "Build and run the whole self-hosted stack, exactly as a self-hoster would"
 run = "docker compose up --build"
 
 [tasks.sync-kit]
-description = "Vendor the b28.dev clay style kit into web/assets/vendor"
+description = "Vendor the b28.dev clay style kit into the web app and the website"
 run = """
 set -euo pipefail
-curl -fsSL https://b28.dev/kit/b28-clay.css -o web/assets/vendor/b28-clay.css
-grep -q -- '--clay-' web/assets/vendor/b28-clay.css || { echo "not the b28 clay kit" >&2; exit 1; }
-echo "vendored $(wc -c < web/assets/vendor/b28-clay.css | tr -d ' ') bytes"
+kit=$(mktemp)
+curl -fsSL https://b28.dev/kit/b28-clay.css -o "$kit"
+grep -q -- '--clay-' "$kit" || { echo "not the b28 clay kit" >&2; exit 1; }
+cp "$kit" web/assets/vendor/b28-clay.css
+cp "$kit" site/src/styles/b28-clay.css
+echo "vendored $(wc -c < "$kit" | tr -d ' ') bytes into web/ and site/"
 """
 
 [tasks."version:check"]

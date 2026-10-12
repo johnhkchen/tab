@@ -1,0 +1,8 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	// Static files only: no Worker code runs. `mise run site:deploy` publishes dist/.
+	"name": "tab-site",
+	"compatibility_date": "2026-10-01",
+	"routes": [{ "pattern": "tab.b28.dev", "custom_domain": true }],
+	"assets": { "directory": "./dist", "not_found_handling": "404-page" }
+}
