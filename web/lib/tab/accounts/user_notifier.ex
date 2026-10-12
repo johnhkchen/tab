@@ -9,7 +9,7 @@ defmodule Tab.Accounts.UserNotifier do
     email =
       new()
       |> to(recipient)
-      |> from({"Tab", "contact@example.com"})
+      |> from(Tab.Mailer.from())
       |> subject(subject)
       |> text_body(body)
 

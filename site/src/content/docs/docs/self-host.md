@@ -45,6 +45,29 @@ Put these in a file called `.env` next to `compose.yaml` if you need them:
 | `POSTGRES_PASSWORD` | The database password. Set it before the first start.             | `postgres`  |
 | `SECRET_KEY_BASE`   | Signs logins. Leave it out and Tab makes one on first start.      | (made for you) |
 
+## Email
+
+Tab emails you a link to sign in, and lets people know when an expense or
+payment involves them. It doesn't run its own mail server; it hands mail to a
+service you already have.
+
+- **No settings:** emails go to Tab's log instead. To sign in, run
+  `docker compose logs web`, find the link, and open it in your browser.
+  Everything else works.
+- **[Resend](https://resend.com):** the easiest. Make an account, add your
+  domain, create an API key, and set `RESEND_API_KEY`.
+- **Any other mail service** (Fastmail, Gmail with an app password, Amazon SES,
+  Postmark): set the `SMTP_` settings it gives you.
+
+| Setting         | What it's for                                                  | Default |
+| --------------- | -------------------------------------------------------------- | ------- |
+| `RESEND_API_KEY` | Send through Resend.                                          | (none)  |
+| `SMTP_HOST`     | Send through this mail server instead.                         | (none)  |
+| `SMTP_PORT`     | Its port. 465 uses TLS from the start; others upgrade to it.   | `587`   |
+| `SMTP_USERNAME`, `SMTP_PASSWORD` | Your login for it.                            | (none)  |
+| `SMTP_TLS`      | Set to `if_available` only for a local relay that has no TLS.  | (TLS required) |
+| `TAB_MAIL_FROM` | The address Tab's mail comes from. Use one your service lets you send as. | `tab@` your `PHX_HOST` |
+
 ## Updating
 
 ```sh

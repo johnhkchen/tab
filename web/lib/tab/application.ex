@@ -20,6 +20,7 @@ defmodule Tab.Application do
     # See https://elixir.hexdocs.pm/Supervisor.html
     # for other strategies and supported options
     opts = [strategy: :one_for_one, name: Tab.Supervisor]
+    Tab.Mailer.warn_if_log_only()
     Supervisor.start_link(children, opts)
   end
 

@@ -36,6 +36,14 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-}
       PHX_HOST: ${PHX_HOST:-localhost}
       EXTRACT_URL: http://extract:4100
+      # Mail: Resend, or any SMTP service; with neither, emails go to the log.
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      TAB_MAIL_FROM: ${TAB_MAIL_FROM:-}
       # The release writes its runtime files here instead of its read-only install dir.
       RELEASE_TMP: /tmp
     ports:

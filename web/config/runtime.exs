@@ -120,21 +120,37 @@ if config_env() == :prod do
   #
   # Check `Plug.SSL` for all available options in `force_ssl`.
 
-  # ## Configuring the mailer
-  #
-  # In production you need to configure the mailer to use a different adapter.
-  # Here is an example configuration for Mailgun:
-  #
-  #     config :tab, Tab.Mailer,
-  #       adapter: Swoosh.Adapters.Mailgun,
-  #       api_key: System.get_env("MAILGUN_API_KEY"),
-  #       domain: System.get_env("MAILGUN_DOMAIN")
-  #
-  # Most non-SMTP adapters require an API client. Swoosh supports Req, Hackney,
-  # and Finch out-of-the-box. This configuration is typically done at
-  # compile-time in your config/prod.exs:
-  #
-  #     config :swoosh, :api_client, Swoosh.ApiClient.Req
-  #
-  # See https://swoosh.hexdocs.pm/Swoosh.html#module-installation for details.
+  # Outbound mail (docs/specification.md, "Outbound mail"). Tab never runs a
+  # mail server; it hands mail to a provider. Resend if RESEND_API_KEY is set,
+  # else SMTP if SMTP_HOST is set, else the log: sign-in links are printed there
+  # so a fresh install can still be signed into.
+  # compose.yaml passes unset settings through as empty strings; treat those as unset.
+  mail_env = fn name -> if (value = System.get_env(name)) not in [nil, ""], do: value end
+  mail_from = mail_env.("TAB_MAIL_FROM") || "tab@#{host}"
+  config :tab, :mail_from, {"Tab", mail_from}
+
+  cond do
+    api_key = mail_env.("RESEND_API_KEY") ->
+      config :tab, Tab.Mailer, adapter: Swoosh.Adapters.Resend, api_key: api_key
+
+    smtp_host = mail_env.("SMTP_HOST") ->
+      config :tab, Tab.Mailer,
+        adapter: Swoosh.Adapters.SMTP,
+        relay: smtp_host,
+        port: String.to_integer(mail_env.("SMTP_PORT") || "587"),
+        username: mail_env.("SMTP_USERNAME"),
+        password: mail_env.("SMTP_PASSWORD"),
+        auth: if(mail_env.("SMTP_USERNAME"), do: :always, else: :never),
+        # Port 465 is TLS from the start; anything else upgrades with STARTTLS,
+        # required unless SMTP_TLS=if_available (a local relay without TLS).
+        ssl: mail_env.("SMTP_PORT") == "465",
+        tls: if(mail_env.("SMTP_TLS") == "if_available", do: :if_available, else: :always),
+        retries: 2
+
+    true ->
+      config :tab, Tab.Mailer,
+        adapter: Swoosh.Adapters.Logger,
+        log_full_email: true,
+        level: :warning
+  end
 end
