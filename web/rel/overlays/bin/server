@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+cd -P -- "$(dirname -- "$0")"
+
+# No secret given? Make one on first boot and keep it in the data volume,
+# so `docker compose up` needs no setup step.
+if [ -z "${SECRET_KEY_BASE:-}" ]; then
+  key_file="${TAB_DATA_DIR:-/app/data}/secret_key_base"
+  if [ ! -s "$key_file" ]; then
+    mkdir -p "$(dirname -- "$key_file")"
+    (umask 077 && head -c 48 /dev/urandom | base64 | tr -d '\n' > "$key_file")
+  fi
+  SECRET_KEY_BASE="$(cat "$key_file")"
+  export SECRET_KEY_BASE
+fi
+
+# Updating means pulling a new image and restarting; migrations run on the way up.
+./migrate
+
+PHX_SERVER=true exec ./tab start

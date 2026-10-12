@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: mise run check
+    runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      MIX_ENV: test
+    steps:
+      - uses: actions/checkout@v7
+      - uses: jdx/mise-action@v5
+      - uses: actions/cache@v6
+        with:
+          path: |
+            web/deps
+            web/_build
+          key: mix-${{ runner.os }}-${{ hashFiles('mise.toml', 'web/mix.lock') }}
+          restore-keys: mix-${{ runner.os }}-
+      - run: mix deps.get
+        working-directory: web
+      # Postgres comes from the service container above, so skip the local `db` task.
+      - run: mise run --skip-deps check:web ::: check:extract ::: version:check
+
+  stack:
+    name: docker compose up
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - run: docker compose up --build --detach --wait
+        timeout-minutes: 15
+      - name: Health check
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -fsS localhost:4000/healthz) && break
+            sleep 2
+          done
+          echo "$body"
+          echo "$body" | jq -e '.db == "ok" and .extract == "ok"'
+      - name: Logs
+        if: failure()
+        run: docker compose logs

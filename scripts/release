@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Tags the current version. Pushing the tag is what publishes (images + GitHub release),
+# so this script stops short of it and tells you the command.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+version=$(scripts/version-check)
+tag="v$version"
+
+[[ -z "$(git status --porcelain)" ]] || { echo "working tree isn't clean; commit first" >&2; exit 1; }
+[[ "$(git branch --show-current)" == "main" ]] || { echo "release from main" >&2; exit 1; }
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+  echo "$tag already exists; bump the version first" >&2
+  exit 1
+fi
+
+git tag -a "$tag" -m "Tab $version"
+echo "Tagged $tag. To publish: git push origin main $tag"

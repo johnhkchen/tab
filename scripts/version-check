@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Every place that names Tab's version must agree. Prints the version on success.
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+web=$(sed -nE 's/^ *version: "([^"]+)",$/\1/p' web/mix.exs)
+extract=$(grep -A1 'function version()' extract/baml_src/main.baml | sed -nE 's/^ *"([^"]+)"$/\1/p')
+compose=$(grep -oE 'TAB_VERSION:-[0-9][^}]*' compose.yaml | sort -u | sed 's/TAB_VERSION:-//')
+changelog=$(sed -nE 's/^## \[([0-9][^]]*)\].*/\1/p' CHANGELOG.md | head -1)
+
+status=0
+for pair in "extract/baml_src/main.baml:$extract" "compose.yaml:$compose" "CHANGELOG.md:$changelog"; do
+  if [[ "${pair#*:}" != "$web" ]]; then
+    echo "version mismatch: web/mix.exs says $web, ${pair%%:*} says ${pair#*:}" >&2
+    status=1
+  fi
+done
+[[ $status == 0 ]] && echo "$web"
+exit $status

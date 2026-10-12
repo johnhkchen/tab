@@ -1,0 +1,26 @@
+<Layouts.flash_group flash={@flash} />
+<main class="b28-clay min-h-screen bg-[var(--clay-bg)] text-[var(--clay-ink)] px-4 py-16 sm:py-24">
+  <div class="mx-auto max-w-xl space-y-8">
+    <header class="space-y-3">
+      <h1 class="text-5xl font-semibold tracking-tight">Tab</h1>
+      <p class="text-xl text-[var(--clay-ink-soft)]">
+        Keeps the running tab for your house, so nobody has to.
+      </p>
+    </header>
+
+    <section class="clay-surface p-6 space-y-3">
+      <p>
+        Log what you spent, see who owes whom, and settle up. Your housemates see the
+        shared bills. Your own spending stays yours, and the database itself enforces that.
+      </p>
+      <p class="text-[var(--clay-ink-soft)]">
+        This is version {Application.spec(:tab, :vsn)}: the foundation is in, the rooms are next.
+      </p>
+    </section>
+
+    <footer class="flex flex-wrap gap-3 text-sm">
+      <a class="clay-chip" href="https://github.com/johnhkchen/tab">Read the code</a>
+      <a class="clay-chip" href={~p"/healthz"}>Check it's running</a>
+    </footer>
+  </div>
+</main>

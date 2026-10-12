@@ -1,0 +1,106 @@
+# Tab toolchain. `mise install` gets you everything; `mise tasks` lists the commands.
+
+[tools]
+erlang = "28.5"
+elixir = "1.20.4-otp-28"
+# BAML Language toolchain for the extraction service (extract/). Pinned to a stable release.
+"github:BoundaryML/baml" = { version = "0.21.0", version_prefix = "baml-language-", bin = "baml-cli" }
+
+[settings]
+# Use precompiled Erlang instead of building from source (seconds, not half an hour).
+erlang.compile = false
+
+[env]
+# We call the pinned baml-cli directly instead of the `baml` version-manager wrapper.
+BAML_CLI_ALLOW_DIRECT = "1"
+BAML_AGENT_SKILL_CHECK = "off"
+# Bills and receipts flow through extraction; no vendor analytics or tracing.
+DO_NOT_TRACK = "1"
+BAML_TELEMETRY = "off"
+
+# ---------------------------------------------------------------------------
+# Tasks: `mise run <name>`. `mise run check` is the same gate CI runs.
+
+[tasks.setup]
+description = "First run: start Postgres, fetch deps, create and migrate the database"
+depends = ["db"]
+dir = "web"
+run = "mix setup"
+
+[tasks.db]
+description = "Start the local Postgres (Docker) and wait until it accepts connections"
+run = """
+docker compose up -d db
+until docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
+"""
+
+[tasks.dev]
+description = "Run the web app (localhost:4000) and the extraction service (localhost:4100)"
+depends = ["db"]
+run = "mise run dev:web ::: dev:extract"
+
+[tasks."dev:web"]
+dir = "web"
+run = "iex -S mix phx.server"
+
+[tasks."dev:extract"]
+dir = "extract"
+run = "baml-cli run main"
+
+[tasks.test]
+description = "Run every test: Phoenix (incl. RLS proofs) and BAML"
+depends = ["test:web", "test:extract"]
+
+[tasks."test:web"]
+depends = ["db"]
+dir = "web"
+run = "mix test"
+
+[tasks."test:extract"]
+dir = "extract"
+run = "baml-cli test"
+
+[tasks.check]
+description = "The CI gate: formatting, warnings-as-errors, versions in step, all tests"
+depends = ["check:web", "check:extract", "version:check"]
+
+[tasks."check:web"]
+depends = ["db"]
+dir = "web"
+env = { MIX_ENV = "test" }
+run = [
+  "mix format --check-formatted",
+  "mix compile --warnings-as-errors",
+  "mix test",
+]
+
+[tasks."check:extract"]
+dir = "extract"
+run = [
+  # baml fmt has no --check: format a copy and fail if it differs.
+  'tmp=$(mktemp -d) && cp -R baml.toml baml_src "$tmp" && baml-cli fmt -q --agent-skill-check off --project "$tmp" && diff -ru baml_src "$tmp/baml_src"',
+  "baml-cli check",
+  "baml-cli test",
+]
+
+[tasks.up]
+description = "Build and run the whole self-hosted stack, exactly as a self-hoster would"
+run = "docker compose up --build"
+
+[tasks.sync-kit]
+description = "Vendor the b28.dev clay style kit into web/assets/vendor"
+run = """
+set -euo pipefail
+curl -fsSL https://b28.dev/kit/b28-clay.css -o web/assets/vendor/b28-clay.css
+grep -q -- '--clay-' web/assets/vendor/b28-clay.css || { echo "not the b28 clay kit" >&2; exit 1; }
+echo "vendored $(wc -c < web/assets/vendor/b28-clay.css | tr -d ' ') bytes"
+"""
+
+[tasks."version:check"]
+description = "Fail unless every place that names the version agrees"
+run = "scripts/version-check"
+
+[tasks.release]
+description = "Tag the current version (vX.Y.Z) after the gate passes. Pushing the tag publishes."
+depends = ["check"]
+run = "scripts/release"
