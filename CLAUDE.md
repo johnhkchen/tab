@@ -28,7 +28,8 @@ row-level security. Monorepo:
   `compose.yaml`, `CHANGELOG.md`); `mise run version:check` keeps them in step.
 - **The pricing page must match the spec exactly** (spec §9): Hosted free $0, Plus $10/yr,
   Pro $24/yr, billed yearly; a once-a-year 6-month gift; a 3-month Plus trial for new
-  accounts, extendable 6 months at a time on request. No trial or gift ever charges. Reaching the reading allowance
+  accounts, extendable 6 months at a time on request, with best-effort reading (smaller
+  limit, lower priority than paying). No trial or gift ever charges. Reaching the reading allowance
   pauses reading; never a charge.
 - **UI uses the b28 clay kit** (vendored in `web/` and `site/`; refresh both with
   `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`.
