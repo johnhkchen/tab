@@ -4,12 +4,14 @@ defmodule Tab.DBError do
   rules are enforced; this only names what it said.
   """
 
-  @type reason :: :forbidden | :invalid_invite | :already_member | {:invalid, String.t()}
+  @type reason ::
+          :forbidden | :invalid_invite | :already_member | :unsettled | {:invalid, String.t()}
 
   @spec reason(Postgrex.Error.t()) :: reason | nil
   def reason(%Postgrex.Error{postgres: %{code: :insufficient_privilege}}), do: :forbidden
   def reason(%Postgrex.Error{postgres: %{hint: "invalid_invite"}}), do: :invalid_invite
   def reason(%Postgrex.Error{postgres: %{hint: "already_member"}}), do: :already_member
+  def reason(%Postgrex.Error{postgres: %{hint: "unsettled"}}), do: :unsettled
 
   def reason(%Postgrex.Error{postgres: %{code: code, message: message}})
       when code in [

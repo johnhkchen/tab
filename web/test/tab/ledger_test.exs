@@ -50,6 +50,33 @@ defmodule Tab.LedgerTest do
       assert {:error, :not_found} = Groups.rename_group(stranger, ctx.house.id, "Mine")
     end
 
+    test "you can't leave owing money; an admin can still remove you", ctx do
+      {:ok, _} =
+        Ledger.create_expense(ctx.priya, ctx.house.id, %{
+          description: "Rent",
+          amount_cents: 2_000,
+          date: ~D[2026-10-01],
+          paid_by: ctx.p,
+          split: equal([ctx.p, ctx.s])
+        })
+
+      assert {:error, :unsettled} = Groups.leave_group(ctx.sam, ctx.house.id)
+      assert {:error, :not_found} = Groups.remove_member(ctx.sam, ctx.house.id, ctx.p)
+      assert {:ok, :done} = Groups.remove_member(ctx.priya, ctx.house.id, ctx.s)
+      assert {:ok, [%{amount_cents: 1_000}]} = Ledger.balances(ctx.priya, ctx.house.id)
+    end
+
+    test "an archived group is read-only until an admin unarchives it", ctx do
+      assert {:ok, :done} = Groups.archive_group(ctx.priya, ctx.house.id)
+
+      assert {:error, :forbidden} =
+               Groups.create_counterparty(ctx.sam, ctx.house.id, %{name: "Landlord"})
+
+      assert {:ok, [_]} = Groups.list_groups(ctx.sam)
+      assert {:ok, :done} = Groups.unarchive_group(ctx.priya, ctx.house.id)
+      assert {:ok, _} = Groups.create_counterparty(ctx.sam, ctx.house.id, %{name: "Landlord"})
+    end
+
     test "only admins rename; a member can leave", ctx do
       assert {:error, %Ecto.Changeset{}} = Groups.rename_group(ctx.sam, ctx.house.id, "Ours")
       assert {:ok, %{name: "Ours"}} = Groups.rename_group(ctx.priya, ctx.house.id, "Ours")
@@ -118,8 +145,10 @@ defmodule Tab.LedgerTest do
       assert {:error, %Ecto.Changeset{}} =
                Ledger.update_expense(ctx.sam, e.id, %{amount_cents: 1})
 
+      assert e.edited_at == nil
       {:ok, e} = Ledger.update_expense(ctx.priya, e.id, %{amount_cents: 3_000})
       assert Enum.map(e.shares, & &1.amount_cents) == [1_500, 1_500]
+      assert %DateTime{} = e.edited_at
 
       assert {:ok, :done} = Ledger.delete_expense(ctx.priya, e.id)
       assert {:ok, []} = Ledger.balances(ctx.sam, ctx.house.id)

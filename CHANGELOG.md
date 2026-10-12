@@ -15,6 +15,11 @@ What changed in each version of Tab, newest first.
 - A payment between two members counts once the person paid confirms it. A
   payment with a counterparty counts right away.
 - Private expenses only their creator can see, not even the group's admin.
+- You settle up before you leave a group. An admin can still remove someone
+  who owes money, and payments with them still count.
+- An expense changed after it was added is marked as edited.
+- Admins can archive a group: it stays readable but nothing in it changes until
+  they unarchive it.
 - A history of every change, written by the database, that nobody can edit.
 - No screens yet: this is the layer the web app will stand on.
 

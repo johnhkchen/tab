@@ -369,6 +369,142 @@ defmodule Tab.Ledger.LedgerRulesTest do
     end
   end
 
+  describe "leaving a group" do
+    defp leave(uid, group, who \\ nil) do
+      run(uid, "UPDATE memberships SET left_at = now() WHERE group_id = $1 AND user_id = $2", [
+        group,
+        who || uid
+      ])
+    end
+
+    defp unsettled?({:error, %Postgrex.Error{postgres: %{hint: "unsettled"}}}), do: true
+    defp unsettled?(_), do: false
+
+    test "takes being even with everyone first" do
+      {group, [admin, a, b]} = household(3)
+      expense!(b, group, 2_000, [{a, 1_000}, {b, 1_000}])
+
+      assert unsettled?(leave(a, group))
+      assert unsettled?(leave(b, group))
+
+      {_, "confirmed"} = payment!(b, group, a, b, 1_000)
+      assert {:ok, %{num_rows: 1}} = leave(a, group)
+      assert {:ok, %{num_rows: 1}} = leave(b, group)
+      assert {:ok, %{num_rows: 1}} = leave(admin, group)
+    end
+
+    test "waits for payments you haven't confirmed yet" do
+      {group, [_admin, a, b]} = household(3)
+      {_, "pending"} = payment!(a, group, a, b, 500)
+      assert unsettled?(leave(b, group))
+    end
+
+    test "an admin can still remove someone who isn't even, and their debt can still be paid" do
+      {group, [admin, a]} = household(2)
+      expense!(admin, group, 2_000, [{admin, 1_000}, {a, 1_000}])
+
+      assert {:ok, %{num_rows: 1}} = leave(admin, group, a)
+      assert balances(admin, group) == [{a, admin, 1_000}]
+
+      # They can't confirm anything any more, so it counts as soon as it's recorded.
+      assert {_, "self_attested"} = payment!(admin, group, a, admin, 400)
+      assert {_, "self_attested"} = payment!(admin, group, admin, a, 100)
+      assert balances(admin, group) == [{a, admin, 700}]
+    end
+  end
+
+  describe "editing an expense" do
+    test "marks it edited when what was spent or how it's split changes, but not on delete" do
+      {group, [a, b]} = household(2)
+      e = expense!(a, group, 1_000, [{a, 500}, {b, 500}])
+
+      edited_at = fn ->
+        owner!("SELECT edited_at IS NOT NULL FROM expenses WHERE id = $1", [e])
+      end
+
+      assert edited_at.() == [[false]]
+      run!(a, "UPDATE expenses SET deleted_at = now() WHERE id = $1", [e])
+      assert edited_at.() == [[false]]
+
+      run!(a, "UPDATE expenses SET deleted_at = NULL, amount_cents = 1000 WHERE id = $1", [e])
+      assert edited_at.() == [[false]]
+
+      run!(a, "UPDATE expenses SET description = 'Dinner, with tip' WHERE id = $1", [e])
+      assert edited_at.() == [[true]]
+    end
+
+    test "can't be faked as unedited" do
+      {group, [a, b]} = household(2)
+      e = expense!(a, group, 1_000, [{a, 500}, {b, 500}])
+      assert {:error, _} = run(a, "UPDATE expenses SET edited_at = NULL WHERE id = $1", [e])
+    end
+  end
+
+  describe "an archived group" do
+    setup do
+      {group, [admin, member]} = household(2)
+      e = expense!(member, group, 1_000, [{admin, 500}, {member, 500}])
+      run!(admin, "UPDATE groups SET deleted_at = now() WHERE id = $1", [group])
+      %{group: group, admin: admin, member: member, expense: e}
+    end
+
+    test "is read-only for everyone, admins included", ctx do
+      refused = fn result ->
+        match?({:error, %{postgres: %{code: :insufficient_privilege}}}, result)
+      end
+
+      for who <- [ctx.admin, ctx.member] do
+        assert refused.(
+                 run(who, "INSERT INTO counterparties (group_id, name) VALUES ($1, 'x')", [
+                   ctx.group
+                 ])
+               )
+
+        assert refused.(
+                 run(who, "INSERT INTO categories (group_id, name) VALUES ($1, 'x')", [ctx.group])
+               )
+
+        assert refused.(
+                 run(
+                   who,
+                   "INSERT INTO payments (group_id, from_user_id, to_user_id, amount_cents, date, method) VALUES ($1, $2, $3, 1, '2026-10-01', 'cash')",
+                   [ctx.group, ctx.member, ctx.admin]
+                 )
+               )
+
+        assert {:ok, %{num_rows: 0}} =
+                 run(who, "UPDATE expenses SET description = 'x' WHERE id = $1", [ctx.expense])
+
+        assert refused.(
+                 run(who, "SELECT set_expense_shares($1, $2)", [
+                   ctx.expense,
+                   shares_json([{ctx.member, 1_000}])
+                 ])
+               )
+      end
+
+      assert refused.(
+               run(ctx.admin, "INSERT INTO invites (group_id, token_hash) VALUES ($1, $2)", [
+                 ctx.group,
+                 {:bytes, :crypto.strong_rand_bytes(32)}
+               ])
+             )
+    end
+
+    test "stays readable, balances included", ctx do
+      assert [[_]] = run!(ctx.member, "SELECT 1 FROM groups WHERE id = $1", [ctx.group])
+      assert [[_]] = run!(ctx.member, "SELECT 1 FROM expenses WHERE id = $1", [ctx.expense])
+      assert balances(ctx.member, ctx.group) == [{ctx.admin, ctx.member, 500}]
+    end
+
+    test "comes back when an admin unarchives it", ctx do
+      sql = "UPDATE groups SET deleted_at = NULL WHERE id = $1"
+      assert {:ok, %{num_rows: 0}} = run(ctx.member, sql, [ctx.group])
+      assert {:ok, %{num_rows: 1}} = run(ctx.admin, sql, [ctx.group])
+      assert counterparty!(ctx.member, ctx.group, "Landlord")
+    end
+  end
+
   describe "the schema itself" do
     test "tab_user lacks DELETE and TRUNCATE on every table and view" do
       rows =

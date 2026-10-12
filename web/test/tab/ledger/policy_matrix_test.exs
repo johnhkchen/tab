@@ -214,18 +214,21 @@ defmodule Tab.Ledger.PolicyMatrixTest do
       assert rows(run(ctx.admin, sql, [ctx.group, ctx.other])) == 1
     end
 
-    test "a member can leave, and then sees nothing of the group but their own row", ctx do
+    test "a member who's even can leave, and then sees nothing of the group but their own row",
+         ctx do
+      newcomer = person()
+      join!(newcomer, ctx.group, ctx.admin)
       sql = "UPDATE memberships SET left_at = now() WHERE group_id = $1 AND user_id = $2"
-      assert rows(run(ctx.member, sql, [ctx.group, ctx.member])) == 1
+      assert rows(run(newcomer, sql, [ctx.group, newcomer])) == 1
 
-      assert count(ctx.member, "SELECT 1 FROM groups WHERE id = $1", [ctx.group]) == 0
-      assert count(ctx.member, "SELECT 1 FROM memberships WHERE group_id = $1", [ctx.group]) == 1
-      assert count(ctx.member, "SELECT 1 FROM expenses WHERE id = $1", [ctx.shared]) == 0
+      assert count(newcomer, "SELECT 1 FROM groups WHERE id = $1", [ctx.group]) == 0
+      assert count(newcomer, "SELECT 1 FROM memberships WHERE group_id = $1", [ctx.group]) == 1
+      assert count(newcomer, "SELECT 1 FROM expenses WHERE id = $1", [ctx.shared]) == 0
 
       # ...and can't rejoin by clearing left_at.
       assert rows(
-               run(ctx.member, "UPDATE memberships SET left_at = NULL WHERE user_id = $1", [
-                 ctx.member
+               run(newcomer, "UPDATE memberships SET left_at = NULL WHERE user_id = $1", [
+                 newcomer
                ])
              ) == 0
     end

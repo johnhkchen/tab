@@ -46,9 +46,17 @@ defmodule Tab.Groups do
     end)
   end
 
-  @doc "Archives a group (admins only). Nothing is deleted; members can still read it."
+  @doc """
+  Archives a group (admins only). Nothing is deleted: members can still read
+  and export it, but nothing in it can change until an admin unarchives it.
+  Check `Tab.Ledger.balances/2` first to warn when someone still owes money.
+  """
   def archive_group(%Scope{} = scope, id) do
     as_user(scope, fn -> touched(set(Group, id, deleted_at: now())) end)
+  end
+
+  def unarchive_group(%Scope{} = scope, id) do
+    as_user(scope, fn -> touched(set(Group, id, deleted_at: nil)) end)
   end
 
   ## Members
@@ -66,11 +74,25 @@ defmodule Tab.Groups do
     end)
   end
 
-  @doc "Leaves a group. History stays with the group; you lose access to it."
-  def leave_group(%Scope{user: user} = scope, group_id) do
+  @doc """
+  Leaves a group. You have to be even with everyone first (`{:error,
+  :unsettled}` otherwise). History stays with the group; you lose access to it.
+  """
+  def leave_group(%Scope{user: user} = scope, group_id),
+    do: end_membership(scope, group_id, user.id)
+
+  @doc """
+  Removes someone from a group (admins only), even if they aren't even. What
+  they owe or are owed stays in the balances, and payments with them still
+  count as soon as they're recorded.
+  """
+  def remove_member(%Scope{} = scope, group_id, user_id),
+    do: end_membership(scope, group_id, user_id)
+
+  defp end_membership(scope, group_id, user_id) do
     as_user(scope, fn ->
       from(m in Membership,
-        where: m.group_id == ^group_id and m.user_id == ^user.id and is_nil(m.left_at)
+        where: m.group_id == ^group_id and m.user_id == ^user_id and is_nil(m.left_at)
       )
       |> Repo.update_all(set: [left_at: now(), updated_at: now()])
       |> touched()

@@ -7,6 +7,9 @@ defmodule Tab.Repo.Migrations.LedgerPolicies do
   spec allows (column lists on UPDATE pin what may change), and has one policy
   per verb. Verbs nobody may use still get a policy that refuses, so no verb is
   ever left to a default. `tab_user` never gets DELETE.
+
+  Writes use `auth.can_write/1` (an active member of a group that isn't
+  archived); reads use `auth.is_member/1`, so archived groups stay readable.
   """
   use Ecto.Migration
 
@@ -52,24 +55,24 @@ defmodule Tab.Repo.Migrations.LedgerPolicies do
       ["SELECT", "INSERT", "UPDATE (revoked_at, updated_at)"],
       %{
         select: "auth.is_admin(group_id)",
-        insert: "auth.is_admin(group_id) AND created_by = auth.uid()",
-        update: {"auth.is_admin(group_id)", "auth.is_admin(group_id)"}
+        insert: "auth.can_admin(group_id) AND created_by = auth.uid()",
+        update: {"auth.can_admin(group_id)", "auth.can_admin(group_id)"}
       }
     },
     counterparties: {
       ["SELECT", "INSERT", "UPDATE (name, contact_email, notes, deleted_at, updated_at)"],
       %{
         select: "auth.is_member(group_id)",
-        insert: "auth.is_member(group_id) AND created_by = auth.uid()",
-        update: {"auth.is_member(group_id)", "auth.is_member(group_id)"}
+        insert: "auth.can_write(group_id) AND created_by = auth.uid()",
+        update: {"auth.can_write(group_id)", "auth.can_write(group_id)"}
       }
     },
     categories: {
       ["SELECT", "INSERT", "UPDATE (name, deleted_at, updated_at)"],
       %{
         select: "auth.is_member(group_id)",
-        insert: "auth.is_member(group_id) AND created_by = auth.uid()",
-        update: {"auth.is_member(group_id)", "auth.is_member(group_id)"}
+        insert: "auth.can_write(group_id) AND created_by = auth.uid()",
+        update: {"auth.can_write(group_id)", "auth.can_write(group_id)"}
       }
     },
     expenses: {
@@ -84,12 +87,12 @@ defmodule Tab.Repo.Migrations.LedgerPolicies do
           "(visibility = 'shared' AND auth.is_member(group_id)) " <>
             "OR (visibility = 'private' AND created_by = auth.uid())",
         insert:
-          "auth.is_member(group_id) AND created_by = auth.uid() " <>
+          "auth.can_write(group_id) AND created_by = auth.uid() " <>
             "AND (visibility = 'shared' OR paid_by = auth.uid())",
         update:
-          {"auth.is_member(group_id) AND (created_by = auth.uid() " <>
+          {"auth.can_write(group_id) AND (created_by = auth.uid() " <>
              "OR (visibility = 'shared' AND auth.is_admin(group_id)))",
-           "auth.is_member(group_id) AND (visibility = 'shared' " <>
+           "auth.can_write(group_id) AND (visibility = 'shared' " <>
              "OR (created_by = auth.uid() AND paid_by = auth.uid()))"}
       }
     },
@@ -111,10 +114,10 @@ defmodule Tab.Repo.Migrations.LedgerPolicies do
       ],
       %{
         select: "auth.is_member(group_id)",
-        insert: "auth.is_member(group_id) AND recorded_by = auth.uid()",
+        insert: "auth.can_write(group_id) AND recorded_by = auth.uid()",
         update:
-          {"auth.is_member(group_id) AND (to_user_id = auth.uid() OR recorded_by = auth.uid())",
-           "auth.is_member(group_id)"}
+          {"auth.can_write(group_id) AND (to_user_id = auth.uid() OR recorded_by = auth.uid())",
+           "auth.can_write(group_id)"}
       }
     },
     audit_log: {

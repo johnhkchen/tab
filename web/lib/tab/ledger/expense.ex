@@ -13,6 +13,8 @@ defmodule Tab.Ledger.Expense do
     field :period_start, :date
     field :period_end, :date
     field :created_by, :binary_id
+    # Set by the database when what was spent or how it's split changes.
+    field :edited_at, :utc_datetime
     field :deleted_at, :utc_datetime
 
     has_many :shares, Tab.Ledger.ExpenseShare

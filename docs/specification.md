@@ -37,6 +37,9 @@ Later phases get their own sections here when they're next.
 | Profiles vs. accounts | `users` (email, sign-in data) is visible only to its owner. `profiles` (display name, payment methods, reminder channel) is visible to anyone who shares an active group with that person. |
 | Audit log | Written by Postgres triggers, not app code, so no code path can skip it. |
 | Outbound mail | Resend through Swoosh's Resend adapter when `RESEND_API_KEY` is set (Cloud uses it, key in Doppler `tab/prd`). Generic SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`) for self-hosters who prefer it. With neither, mail goes to the server log, so a fresh install can still sign in, and the app warns at boot. Tab never runs a mail server for sending. Wired up in phase 2. |
+| Leaving a group | You can't leave until you're even with everyone in it, including payments to you still waiting for your confirmation (`settle up before you leave`). An admin can remove anyone, even with money owed; their balances stay in the group. Payments with a former member count as soon as they're recorded (`self_attested`), since they can't confirm anything. Decided 2026-10-12. |
+| Editing after payments | Allowed; balances recompute. The database stamps `expenses.edited_at` whenever what was spent, by whom, or how it's split changes, and the app shows the expense as edited. Everyone in the split gets an email when the amount or split changes (phase 2). Decided 2026-10-12. |
+| Archiving a group | Admins archive any time (`groups.deleted_at`), with a warning first if anyone still owes money. An archived group is read-only for everyone, admins included, but stays readable and exportable. Admins can unarchive. Decided 2026-10-12. |
 | Invites | Single-use and expiring (7 days by default), stored as a hash of the token, redeemed only through one database function that checks and consumes the invite atomically. |
 
 ## Phase 1: The ledger, enforced by the database
@@ -164,7 +167,10 @@ payments; they don't record any.
 
 ### Row-level security, table by table
 
-`auth.is_member(group_id)` and `auth.is_admin(group_id)` are `SECURITY DEFINER`,
+Reads use `auth.is_member(group_id)`. Writes use `auth.can_write(group_id)` and
+`auth.can_admin(group_id)`, which also require the group not to be archived;
+wherever the table below says "members" or "admins" for insert or update, read
+it that way. `auth.is_member(group_id)` and `auth.is_admin(group_id)` are `SECURITY DEFINER`,
 `STABLE` SQL functions over active memberships, so policies on `memberships`
 itself don't recurse.
 
@@ -271,12 +277,12 @@ wide with no sideways scrolling. Copy follows the brand voice and `stop-slop`.
 
 - Sent by Swoosh from an Oban job, so a slow or failing mail service never blocks
   a page.
-- Two events: a new shared expense you're part of, and a pending payment waiting
-  for you to confirm.
+- Three events: a new shared expense you're part of, a change to the amount or
+  split of one you're part of, and a pending payment waiting for you to confirm.
 - One email per event, to the people involved, never to the person who caused it.
-- Self-host: SMTP settings are optional. With none set, notifications are skipped
-  and logged, and everything else works. Cloud: an outbound sender (Amazon SES is
-  the likely pick), configured through Doppler.
+- Sent through Resend or SMTP (see "Outbound mail" above). With neither set,
+  notifications are skipped and logged, sign-in links go to the log, and
+  everything else works.
 
 ### Tests that must pass before phase 3
 
@@ -309,15 +315,7 @@ caps on any plan.
 
 ## Open questions (with the default used until decided)
 
-1. **Leaving a group with money still owed.** Default: you can leave; your
-   history stays with the group, and others still see what you owed or were owed
-   at the time. You lose access.
-2. **Editing an expense after someone has paid against it.** Default: allowed,
-   balances recompute, and the edit shows in history. Payments aren't tied to
-   specific expenses, so nothing breaks.
-3. **Deleting a whole group.** Default: admins can archive a group (soft delete).
-   Members can still export their own data from an archived group.
-4. **Receiving mail on self-host (phase 4).** The long-form spec has an in-app
+1. **Receiving mail on self-host (phase 4).** The long-form spec has an in-app
    `gen_smtp` listener, which makes Tab a mail server (MX records, port 25, spam).
    Default until phase 4: replace it with polling a mailbox the self-hoster
    already has (IMAP), or Resend's inbound webhooks if they hold up. Decide when

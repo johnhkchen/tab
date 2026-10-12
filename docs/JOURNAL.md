@@ -30,7 +30,7 @@ this repo), **Gotchas**, **Next**.
   `accept_invite`, `set_expense_shares`) and `*_ledger_policies.exs` (grants and
   one policy per verb per table); `Tab.Ledger.Split`; contexts `Tab.Groups` and
   `Tab.Ledger` (all through `Tab.DBError.as_user/2`). Tests: policy matrix,
-  ledger rules, split properties (StreamData), contexts. 217 web tests.
+  ledger rules, split properties (StreamData), contexts. 227 web tests.
 
 ### Decided
 - **Stack:** Elixir/Phoenix + Postgres RLS; BAML Language as its own service;
@@ -60,6 +60,13 @@ this repo), **Gotchas**, **Next**.
   a second `SECURITY DEFINER` function; users get no UPDATE and profiles no
   INSERT as `tab_user`; settle-up is greedy (at most n−1 payments), not
   provably fewest; invites cap at 30 days.
+- **Three phase-1 open questions settled** (all the recommended options):
+  you settle up before you leave, but an admin can remove anyone; edits after
+  payments are allowed, flagged (`edited_at`), and emailed to the split;
+  archiving makes a group read-only for everyone, is reversible, and warns
+  first if money's owed. Built into the ledger migrations (unreleased, so
+  edited in place) with tests. Two holes found on the way: payments with a
+  former member couldn't be recorded, and archived groups were still writable.
 - **Outbound mail:** Resend (Swoosh's Resend adapter), "for now, at least until
   there's a problem." Generic SMTP for self-hosters who want it; with neither,
   sign-in links go to the server log. Wired up in phase 2. Until then, prod
@@ -123,5 +130,5 @@ this repo), **Gotchas**, **Next**.
 - Start **phase 2** from `docs/specification.md`: wire Resend (and SMTP, and
   log-only) into `config/runtime.exs` first, since sign-in needs mail; then the
   pages, restyled on the clay kit with daisyUI removed.
-- Decide the open questions in the spec before their pages: leaving with a
-  balance, editing after payments, archiving a group.
+- Phase 2 pages for the decisions above: an "edited" mark on expenses, the
+  edit email, the archive warning, and a clear "settle up first" message.

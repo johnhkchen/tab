@@ -91,6 +91,40 @@ defmodule Tab.Repo.Migrations.CreateLedger do
       $$
     """
 
+    # Writes need an active membership in a group that isn't archived.
+    # Archived groups stay readable (and exportable) but nothing in them changes.
+    execute """
+    CREATE FUNCTION auth.can_write(gid uuid) RETURNS boolean
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+      AS $$
+        SELECT auth.is_member(gid)
+           AND NOT EXISTS (SELECT 1 FROM groups g WHERE g.id = gid AND g.deleted_at IS NOT NULL)
+      $$
+    """
+
+    execute """
+    CREATE FUNCTION auth.can_admin(gid uuid) RETURNS boolean
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+      AS $$ SELECT auth.can_write(gid) AND auth.is_admin(gid) $$
+    """
+
+    # Whether `uid` still owes or is owed anything in `gid`, counting payments
+    # to them that are waiting for their confirmation. Reads every row (it runs
+    # as the owner), not just the ones the caller can see.
+    execute """
+    CREATE FUNCTION ledger.has_open_balance(gid uuid, uid uuid) RETURNS boolean
+      LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+      AS $$
+        SELECT EXISTS (SELECT 1 FROM balances b
+                        WHERE b.group_id = gid
+                          AND ((b.debtor_kind = 'user' AND b.debtor_id = uid)
+                            OR (b.creditor_kind = 'user' AND b.creditor_id = uid)))
+            OR EXISTS (SELECT 1 FROM payments p
+                        WHERE p.group_id = gid AND p.to_user_id = uid
+                          AND p.status = 'pending' AND p.deleted_at IS NULL)
+      $$
+    """
+
     # Whether `uid` is an active member of `gid`, or (with `ever`) was one.
     execute """
     CREATE FUNCTION ledger.is_member_user(gid uuid, uid uuid, ever boolean DEFAULT false) RETURNS boolean
@@ -226,6 +260,7 @@ defmodule Tab.Repo.Migrations.CreateLedger do
       period_start date,
       period_end date CHECK (period_end >= period_start),
       created_by uuid NOT NULL REFERENCES users (id),
+      edited_at timestamp(0),
       deleted_at timestamp(0),
       #{@stamps},
       UNIQUE (id, group_id),
@@ -364,13 +399,22 @@ defmodule Tab.Repo.Migrations.CreateLedger do
     """
 
     # -- Memberships: admins change roles; members may only leave -------------
+    # Leaving yourself takes being even with everyone first. An admin can still
+    # remove someone who isn't; their debts stay in the group's balances.
 
     execute """
     CREATE FUNCTION ledger.guard_membership() RETURNS trigger
-      LANGUAGE plpgsql
+      LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public
       AS $$
       BEGIN
-        IF auth.uid() IS NULL OR auth.is_admin(OLD.group_id) THEN
+        IF auth.uid() IS NULL THEN
+          RETURN NEW;
+        END IF;
+        IF OLD.user_id = auth.uid() AND OLD.left_at IS NULL AND NEW.left_at IS NOT NULL
+           AND ledger.has_open_balance(OLD.group_id, OLD.user_id) THEN
+          RAISE EXCEPTION 'settle up before you leave' USING ERRCODE = 'P0001', HINT = 'unsettled';
+        END IF;
+        IF auth.is_admin(OLD.group_id) THEN
           RETURN NEW;
         END IF;
         IF OLD.user_id <> auth.uid() OR NEW.role <> OLD.role
@@ -415,7 +459,7 @@ defmodule Tab.Repo.Migrations.CreateLedger do
       FOR EACH ROW EXECUTE FUNCTION ledger.guard_invite()
     """
 
-    # -- Expenses: the payer is a member; private ones are the creator's own ---
+    # -- Expenses: the payer is a member; edits are flagged ----------------------
 
     execute """
     CREATE FUNCTION ledger.guard_expense() RETURNS trigger
@@ -425,6 +469,17 @@ defmodule Tab.Repo.Migrations.CreateLedger do
         IF (TG_OP = 'INSERT' OR NEW.paid_by IS DISTINCT FROM OLD.paid_by)
            AND NOT ledger.is_member_user(NEW.group_id, NEW.paid_by) THEN
           RAISE EXCEPTION 'whoever paid must be a member of the group' USING ERRCODE = '23514';
+        END IF;
+        -- Changes to what was spent, by whom, or how it's split mark it edited.
+        IF TG_OP = 'UPDATE'
+           AND (NEW.description, NEW.amount_cents, NEW.date, NEW.category_id, NEW.paid_by,
+                NEW.visibility, NEW.split, NEW.period_start, NEW.period_end)
+               IS DISTINCT FROM
+               (OLD.description, OLD.amount_cents, OLD.date, OLD.category_id, OLD.paid_by,
+                OLD.visibility, OLD.split, OLD.period_start, OLD.period_end) THEN
+          NEW.edited_at := #{@now};
+        ELSIF TG_OP = 'INSERT' THEN
+          NEW.edited_at := NULL;
         END IF;
         RETURN NEW;
       END
@@ -506,7 +561,7 @@ defmodule Tab.Repo.Migrations.CreateLedger do
       BEGIN
         SELECT * INTO e FROM expenses WHERE id = p_expense_id FOR UPDATE;
         IF uid IS NULL OR NOT FOUND OR e.deleted_at IS NOT NULL
-           OR NOT auth.is_member(e.group_id)
+           OR NOT auth.can_write(e.group_id)
            OR NOT (e.created_by = uid OR (e.visibility = 'shared' AND auth.is_admin(e.group_id))) THEN
           RAISE EXCEPTION 'you can''t change the shares of this expense' USING ERRCODE = '42501';
         END IF;
@@ -547,8 +602,8 @@ defmodule Tab.Repo.Migrations.CreateLedger do
              IS DISTINCT FROM (OLD.category_id, OLD.method, OLD.reference, OLD.deleted_at));
       BEGIN
         IF terms_changed
-           AND ((NEW.from_user_id IS NOT NULL AND NOT ledger.is_member_user(NEW.group_id, NEW.from_user_id))
-             OR (NEW.to_user_id IS NOT NULL AND NOT ledger.is_member_user(NEW.group_id, NEW.to_user_id))) THEN
+           AND ((NEW.from_user_id IS NOT NULL AND NOT ledger.is_member_user(NEW.group_id, NEW.from_user_id, true))
+             OR (NEW.to_user_id IS NOT NULL AND NOT ledger.is_member_user(NEW.group_id, NEW.to_user_id, true))) THEN
           RAISE EXCEPTION 'both sides of a payment must be members or counterparties of the group'
             USING ERRCODE = '23514';
         END IF;
@@ -570,9 +625,13 @@ defmodule Tab.Repo.Migrations.CreateLedger do
           END IF;
         END IF;
 
-        -- New payments, and payments whose terms changed, get their status from the parties.
+        -- New payments, and payments whose terms changed, get their status from the
+        -- parties. Someone who has left can't confirm anything, so a payment with
+        -- a former member counts as soon as it's recorded, like a counterparty's.
         IF terms_changed AND (uid IS NOT NULL OR TG_OP = 'INSERT') THEN
-          IF NEW.from_counterparty_id IS NOT NULL OR NEW.to_counterparty_id IS NOT NULL THEN
+          IF NEW.from_counterparty_id IS NOT NULL OR NEW.to_counterparty_id IS NOT NULL
+             OR NOT ledger.is_member_user(NEW.group_id, NEW.from_user_id)
+             OR NOT ledger.is_member_user(NEW.group_id, NEW.to_user_id) THEN
             NEW.status := 'self_attested';
             NEW.confirmed_at := NULL;
             NEW.confirmed_by := NULL;
@@ -769,6 +828,8 @@ defmodule Tab.Repo.Migrations.CreateLedger do
       execute "DROP TABLE #{table}"
     end
 
+    execute "DROP FUNCTION auth.can_admin(uuid)"
+    execute "DROP FUNCTION auth.can_write(uuid)"
     execute "DROP FUNCTION auth.shares_group(uuid)"
     execute "DROP FUNCTION auth.is_admin(uuid)"
     execute "DROP FUNCTION auth.is_member(uuid)"
