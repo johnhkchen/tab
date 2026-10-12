@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-13: phase 3 built (bills, temporary splits, float, drafts, statements)
+## 2026-10-13: phase 3 built and released as v0.3.0; phase 4 specified
 
 ### Done
 - Distilled phase 3 into `docs/specification.md` (commit `eb9fdec`) and built it.
@@ -32,6 +32,11 @@ this repo), **Gotchas**, **Next**.
   `/dev/narrow` covers the six new pages; 18 of 18 fit 360 px. Screenshot
   canvas in `scripts/check-narrow` is now 1580×4000.
 - 319 web tests (was 256). `mise run check` and `check:narrow` pass.
+- **v0.3.0 released** (commit `e5b5944`, tag `v0.3.0`). Website docs: new
+  page `/docs/bills/`, "What works today" updated (it still said 0.1.0), and a
+  statement-link line on the privacy page. Site redeployed.
+- Distilled phase 4 (reading bills) into `docs/specification.md`; roadmap set
+  to in progress.
 
 ### Decided
 - The maintainer picked all four recommended options for phase 3: a bill's
@@ -39,14 +44,25 @@ this repo), **Gotchas**, **Next**.
   temporary splits are refused by the database and combined on save after the
   admin confirms; float matches payments to shares oldest first; any member can
   make a 30-day statement link for anyone in the group, and anyone can revoke it.
+- Phase 4, picked by the maintainer: self-host receives mail through **Resend
+  inbound** webhooks (not the recommended mailbox polling, not `gen_smtp`), and
+  Cloud uses the same until the Cloudflare relay comes with phase 6; one
+  server-wide `ANTHROPIC_API_KEY` on `extract`, Claude Haiku 5.5; all personal
+  channels (upload, forwarded email with setup guide, review, template
+  matching, digest), submission links deferred to phase 6; originals deleted on
+  confirm or dismiss unless "Keep the original" is ticked. Open question 1 is
+  closed.
+- Mine, written into the spec: PDFs go to the model as PDFs (BAML has a `pdf`
+  type); photos are resized to 1600 px JPEG in the browser; originals live in
+  Postgres `bytea`; pending items belong to a person and pick a group on review.
 - Override splits are `equal`, `percentage`, or `shares` only; templates also
   allow `exact`; prorated suggestions save as `shares` in lowest terms.
 - Combining two overrides works only when both cover the same bills (spec
   updated). Cadence adds `quarterly` beyond the long-form spec's list.
 
 ### State of the world
-- Nothing outside the repo changed. Not released: CHANGELOG has an
-  Unreleased section; the version is still 0.2.0 everywhere.
+- GitHub: tag `v0.3.0`, release workflow builds `tab-web:0.3.0` and
+  `tab-extract:0.3.0`. Cloudflare: `tab-site` Worker redeployed.
 
 ### Gotchas
 - `Phoenix.LiveViewTest` doesn't send `_target` from `form |> render_change`,
@@ -61,10 +77,10 @@ this repo), **Gotchas**, **Next**.
   means B owes A back. An overpayment covers A's next share ahead of time.
 
 ### Next
-- Release v0.3.0 (bump the four version places, tag, website docs for bills,
-  temporary splits, and statement links), when the maintainer says so.
-- Then phase 4: distill bill reading from `working_specification.md`, and decide
-  open question 1 (self-host inbound mail).
+- Build phase 4: migration and `Tab.Inbox`, the BAML reader, the Resend
+  webhook and jobs, the inbox and review pages, the digest.
+- Outside the repo, later: a Resend receiving domain and webhook for Cloud,
+  `RESEND_WEBHOOK_SECRET` and `ANTHROPIC_API_KEY` in Doppler `tab/prd`.
 
 ---
 

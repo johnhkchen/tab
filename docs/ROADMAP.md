@@ -32,21 +32,20 @@ Sign-in, groups, adding expenses, balances (overall and per category), settling 
 with confirmation, payment methods, CSV export, and email notifications.
 Spec: [specification.md §Phase 2](specification.md#phase-2-the-web-app-people-use).
 
-## Phase 3: Recurring bills and household tools (done, 2026-10-13, not yet released)
+## Phase 3: Recurring bills and household tools (done, v0.3.0, 2026-10-13)
 
 Recurring templates and one-tap logging, time-bound split overrides with day-based
 proration, float tracking (days money sits before it's repaid), reminder drafts
 for Venmo, text, and email, and per-recipient statement links.
 Spec: [specification.md §Phase 3](specification.md#phase-3-recurring-bills-and-household-tools).
 
-## Phase 4: Reading bills (later)
+## Phase 4: Reading bills (in progress)
 
-Forwarded email, receipt photos, and PDFs, read by the `extract/` service into
-pending items a person confirms. Bring-your-own AI key on self-host. Recurrence
-detection on top of phase 3's templates. The review-digest schedule. Inbound mail:
-Cloudflare Email Routing with a store-first R2 + Queue relay on Cloud; on
-self-host, polling a mailbox the person already has, or Resend's inbound
-webhooks (decided when phase 4 is specified; no in-app mail server).
+Photos, PDFs, and forwarded email, read by the `extract/` service (Claude Haiku
+5.5, one server-wide key) into pending items a person confirms. Forwarded mail
+arrives through Resend inbound webhooks, on self-host and Cloud alike; no in-app
+mail server. Matching bills to phase 3's templates, and the twice-a-month digest.
+Spec: [specification.md §Phase 4](specification.md#phase-4-reading-bills).
 
 ## Phase 5: Use Tab from Claude (later)
 

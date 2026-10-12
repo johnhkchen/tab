@@ -1,4 +1,4 @@
-# Specification: phases 1 to 3
+# Specification: phases 1 to 4
 
 The buildable spec for the phases built so far and the one in progress (see [ROADMAP.md](ROADMAP.md)). It
 distills the long-form product spec into decisions an engineer can build from.
@@ -508,18 +508,206 @@ recurring templates and one-tap logging, fixed versus variable stability,
 tested at the database, time-bound overrides with automatic reversion,
 overlap flagged rather than combined in silence, and per-bill proration.
 
+## Phase 4: Reading bills
+
+Send Tab a bill and it fills in the expense for you to check. A photo of a
+receipt, a PDF, or a forwarded email turns into a pending item with the amount,
+the date, the dates it covers, and a suggested split. Nothing reaches the ledger
+until the person confirms it. Every part of the ledger keeps working with the
+reader switched off.
+
+### Decisions for this phase
+
+| Question | Decision |
+|---|---|
+| Receiving mail on self-host | Resend inbound. The self-hoster points a domain's MX at Resend (or uses their account's `<id>.resend.app` address), and Resend posts an `email.received` webhook to Tab. Tab never runs a mail server, so no port 25, no MX on the Tab server, no spam filtering of its own. Cloud uses the same path until the Cloudflare relay arrives with the Cloud edition (phase 6). Replaces the long-form spec's `gen_smtp` listener. Decided 2026-10-13. |
+| Whose key reads bills | One Anthropic key for the whole server, `ANTHROPIC_API_KEY`, set on the `extract` service only (Doppler or `.env`). The web app never holds it. Model: Claude Haiku 5.5 (`claude-haiku-5-5`), fixed, not a setting. Per-person keys wait for Cloud. Decided 2026-10-13. |
+| What phase 4 covers | Photo and PDF upload, forwarded email with a setup guide, the review list, matching bills to phase 3 templates, and the digest. Submission links for people without an account wait for the Cloud edition, since their cost lands on the issuer's allowance. Decided 2026-10-13. |
+| The original document | Deleted once its item is confirmed or dismissed. A "Keep the original" box on the review form attaches it to the expense instead, visible to everyone who can see the expense. Decided 2026-10-13. |
+| PDFs | Sent to the model as PDFs (Claude reads them natively), not as text pulled out locally. At Haiku prices a 10-page cap keeps a statement under a cent, and local extraction loses table layout. |
+| Photos | Resized in the browser to at most 1600 px on the long side and re-encoded as JPEG before upload, so phone photos (including HEIC, which the model can't take) arrive small and in a format it reads. |
+| Where originals live | In Postgres (`bytea`), under row-level security, inside the nightly backup. The containers keep read-only root filesystems; no upload volume. |
+| Which group a pending item goes to | Pending items belong to a person, not a group. Review picks the group: the matched template's group, else the person's only group, else they choose. |
+
+### Configuration
+
+| Variable | Service | Meaning |
+|---|---|---|
+| `ANTHROPIC_API_KEY` | extract | Turns bill reading on. Without it, uploads and mail still land as pending items with the original attached and the fields blank, for typing in by hand. |
+| `RESEND_API_KEY` | web | Already used for sending; also fetches received mail. |
+| `RESEND_WEBHOOK_SECRET` | web | The `email.received` webhook's signing secret. Without it, the inbound endpoint answers 404 and the forwarding section says mail isn't set up on this server. |
+| `TAB_INBOUND_DOMAIN` | web | The domain forwarding addresses live on, like `bills.example.com` or `abc123.resend.app`. |
+| `TAB_READS_PER_DAY` | web | Documents one person can send for reading per day (default 30). Past it, items wait for tomorrow. |
+
+### Tables
+
+**forwarding_addresses**: `id`, `user_id`, `local_part` (24 random base32
+characters, unique), `created_at`, `revoked_at`. One live address per person.
+Making a new one revokes the old one. The address is
+`<local_part>@<TAB_INBOUND_DOMAIN>`, and the random part is the only secret.
+
+**inbound_messages**: `id`, `provider` (`resend`), `provider_id` (unique, so a
+retried webhook lands once), `user_id` (null until matched), `status`
+(`fetching` | `stored` | `unmatched` | `failed`), `received_at`, `from_address`,
+`subject`. Written as the connection owner by the webhook handler, never by a
+person; the owner can read their own.
+
+**documents**: `id`, `user_id`, `kind` (`photo` | `pdf` | `email`),
+`content_type`, `filename`, `byte_size`, `sha256`, `content` (`bytea`, null once
+purged), `expense_id` (set when kept), `purged_at`, `created_at`. Size caps: 10
+MB for a PDF or a raw email, 2 MB for a photo after the browser resizes it.
+
+**pending_items**: `id`, `user_id`, `document_id`, `source` (`upload` |
+`email`), `status` (`reading` | `ready` | `unreadable` | `waiting` |
+`confirmed` | `dismissed`), `doc_type` (see below), `proposal` (jsonb, what the
+reader returned, validated), `due_on`, `template_id` (a suggested match),
+`group_id` (suggested), `expense_id` (set on confirm), `duplicate_of` (a likely
+duplicate expense, for the warning), `read_at`, `created_at`.
+
+**recurring_templates** gains `sender` (optional, lowercase domain or address,
+like `pge.com`), set when someone confirms a bill from that sender against the
+template.
+
+**profiles** gains `digest_days` (int array, default `{10,25}`, each 1 to 28).
+
+All new tables are audited (`documents` without `content`, `pending_items`
+without `proposal` contents beyond the amount).
+
+### Row-level security for the new tables
+
+| Table | select | insert | update | delete |
+|---|---|---|---|---|
+| forwarding_addresses | owner | owner | owner (`revoked_at` only) | none |
+| inbound_messages | owner | none (webhook only) | none | none |
+| documents | owner; members of the expense's group once kept | owner | owner (`expense_id`, purge: `content` to null with `purged_at`) | none |
+| pending_items | owner | owner | owner | none |
+
+Purging sets `content` to null; the row stays for the audit trail. A trigger
+refuses setting `content` back once purged, and refuses `expense_id` on an
+expense the owner can't see or a private one that isn't theirs.
+
+### The reader (`extract/`)
+
+- One endpoint, `POST /read`, takes JSON: `kind` (`photo` | `pdf` | `email`),
+  base64 content and type, and for email the subject, sender, and text body. It
+  returns the type and the fields below, or an error. No database, no tools, no
+  memory between calls.
+- Two BAML functions on Claude Haiku 5.5: classify, then extract with the
+  type's schema. Types: `utility`, `receipt`, `subscription`, `rent`, `travel`,
+  `phone`, `other`.
+- Fields: `merchant`, `total_cents`, `date`, `due_on`, `period_start`,
+  `period_end`, `account_hint` (last 4 only), `line_items` (description, cents),
+  `tax_cents`, `tip_cents`, and `confidence` per field. A field the reader isn't
+  sure of comes back null; the app never fills a guess.
+- The app validates everything it gets back: amounts positive and under $1
+  million, dates within two years, line items adding up to the total within a
+  dollar (else line items are dropped). Anything that fails is blank on the form.
+- Text inside a document can't do anything but change the proposal. The reader
+  has no way to act, and the person confirms every field.
+
+### Getting documents in
+
+- **Upload** (`/inbox`, "Add a bill"): a photo or PDF, several at once. Each
+  becomes a `documents` row and a pending item in `reading`, then an Oban job
+  calls the reader.
+- **Forwarded email:** Resend posts `email.received` to `POST /inbound/resend`.
+  Tab checks the Svix signature (`svix-id`, `svix-timestamp`, `svix-signature`,
+  HMAC-SHA256 over the raw body, five-minute tolerance), writes an
+  `inbound_messages` row keyed by Resend's email id, and only then answers 200.
+  A bad signature gets 401; a database failure gets 503, so Resend retries (for
+  about 27 hours). An Oban job fetches the message
+  (`GET /emails/receiving/{id}`, then its signed raw download), matches a live
+  forwarding address among the recipients, stores the raw message as a
+  `documents` row, and makes the pending item. Mail to an unknown or revoked
+  address is marked `unmatched` and dropped without a reply.
+- **Which part of an email gets read:** the first PDF attachment if there is
+  one, else the first image, else the text body (HTML stripped). The subject
+  and sender go along either way.
+- **Gmail's forwarding check:** turning on auto-forward makes Gmail send a
+  confirmation code to the new address. Tab spots it (from
+  `forwarding-noreply@google.com`), skips reading, and shows the code on the
+  forwarding page.
+- **Duplicates:** a document with the same `sha256` as one the person sent in
+  the last 90 days is dismissed with a note. After reading, an expense in their
+  groups with the same amount within 5 days of the same date sets
+  `duplicate_of`, and review warns before saving.
+- **The daily limit:** past `TAB_READS_PER_DAY`, items wait in `waiting` and a
+  job reads them the next day.
+
+### Review
+
+- `/inbox` lists the person's pending items, newest first: what it is, the
+  amount, the due date, and a time-sensitive flag when `due_on` falls before
+  their next digest day. A chip on the groups page shows how many are ready.
+- Opening one shows the original (image, PDF, or email text) beside the
+  add-expense form, filled in from the proposal: description from the merchant,
+  amount, date, the period the bill covers, category from the type, and the
+  group and split from the matched template. Everything is editable and goes
+  through `Tab.Ledger.create_expense`, the same as typing it in.
+- **Matching a template:** the sender's domain or address against
+  `recurring_templates.sender` in the person's groups, else the merchant name
+  against template names. A match prefills like **Log it** (phase 3: split,
+  payer, autopay date, fixed-amount check) and says so: "Looks like your
+  Electric bill, split like last time." A first bill from a sender with no
+  match offers "Treat bills from pge.com as a bill" after saving, which makes a
+  template from the saved expense.
+- **Receipts with line items:** the form lists them and lets you give an item
+  to one person; the rest splits as chosen (saved as a `tiered` split).
+- **Unreadable** items, and every item when the reader is off, open the same
+  form with blank fields and the original beside it.
+- Dismissing an item, or confirming it without "Keep the original", purges its
+  document.
+
+### The digest
+
+- Items arrive and get read right away, with no email each. On each of a
+  person's `digest_days`, at 9:00 server time, one email lists their ready
+  items, if any.
+- An item due before the next digest day doesn't wait: it gets its own email
+  when it's read, saying when it's due.
+- People set their digest days on the You page.
+
+### Forwarding setup
+
+`/inbox/forwarding` shows the person's address with a Copy button, a button to
+make a new one, and steps for setting up a filter that forwards a sender's
+bills, for Gmail, Outlook.com, iCloud Mail, and Fastmail. Tab never asks for
+access to anyone's mailbox. The page shows the last few emails received, so
+people can see the filter worked.
+
+### Tests that must pass before phase 5
+
+1. **Policy matrix** for the four new tables, every verb, as owner, other group
+   member, and stranger, in raw SQL; a kept document is readable by the
+   expense's group and nobody else; a purged document can't be refilled.
+2. **The review gate:** no reader output, upload, or email creates an expense
+   without a person confirming; a reader reply full of instructions only ever
+   lands as field values. Tested with a scripted reader, no network.
+3. **Mail:** a correctly signed webhook lands once, even sent twice; a bad
+   signature gets 401 and nothing written; a database failure gets 503; mail to
+   an unknown or revoked address writes no pending item; a forwarded utility
+   bill is classified `utility`, and a second bill from the same sender
+   prefills last time's split.
+4. **The digest:** two bills forwarded on the 3rd and 7th with digest days
+   `[10, 25]` are read on arrival, send no email each, and appear together in
+   one digest on the 10th; one due on the 8th gets its own email.
+5. **Reader off:** with no `ANTHROPIC_API_KEY` and `extract` stopped, uploads
+   and mail still land as items to fill in by hand, and `/healthz` stays 200.
+   BAML tests cover classification and parsing against recorded replies.
+
+These cover the phase-4 items in the long-form spec's acceptance criteria (§9):
+photo upload to confirmed expense, forwarded utility bills classified and
+prefilled from last time, the forwarding guide without mailbox access, the
+digest and the time-sensitive flag, and the autopay date on confirm.
+
 ## Deferred, with where it goes
 
 | Item | Phase |
 |---|---|
-| Bill reading, digest schedule, due-date flags, recurrence detection (fills phase 3's `recurring_templates`) | 4 |
 | MCP server and OAuth | 5 |
 | Billing accounts, plans, trial, gifts, referrals, Pro owner features | 6 |
+| Submission links for people without an account, the Cloudflare mail relay for Cloud, per-person AI keys, reading allowances | 6 |
 
 ## Open questions (with the default used until decided)
 
-1. **Receiving mail on self-host (phase 4).** The long-form spec has an in-app
-   `gen_smtp` listener, which makes Tab a mail server (MX records, port 25, spam).
-   Default until phase 4: replace it with polling a mailbox the self-hoster
-   already has (IMAP), or Resend's inbound webhooks if they hold up. Decide when
-   phase 4 is specified.
+None open. Receiving mail on self-host was decided for phase 4 (Resend inbound).
