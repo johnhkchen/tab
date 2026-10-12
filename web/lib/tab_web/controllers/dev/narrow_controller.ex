@@ -7,7 +7,7 @@ defmodule TabWeb.Dev.NarrowController do
   """
   use TabWeb, :controller
 
-  alias Tab.{Accounts, Groups, Ledger}
+  alias Tab.{Accounts, Bills, Groups, Ledger, Statements}
 
   @width 360
 
@@ -31,6 +31,20 @@ defmodule TabWeb.Dev.NarrowController do
     {:ok, [group | _]} = Groups.list_groups(scope)
     {:ok, expenses} = Ledger.list_expenses(scope, group.id)
     expense = List.first(expenses)
+    {:ok, templates} = Bills.list_templates(scope, group.id)
+    template = List.first(templates)
+    {:ok, balances} = Ledger.balances(scope, group.id)
+    me = {:user, scope.user.id}
+    debtor = Enum.find_value(balances, &(&1.creditor == me && &1.debtor))
+
+    # A fresh statement link each time: the page needs a working token.
+    statement =
+      with {_, _} <- debtor,
+           {:ok, token, _} <- Statements.create_link(scope, group.id, debtor) do
+        ~p"/s/#{token}"
+      else
+        _ -> nil
+      end
 
     [
       ~p"/groups",
@@ -40,6 +54,12 @@ defmodule TabWeb.Dev.NarrowController do
       expense && ~p"/groups/#{group}/expenses/#{expense}/edit",
       ~p"/groups/#{group}/settle",
       ~p"/groups/#{group}/members",
+      ~p"/groups/#{group}/bills",
+      ~p"/groups/#{group}/temporary",
+      template && ~p"/groups/#{group}/expenses/new?template=#{template.id}",
+      debtor && ~p"/groups/#{group}/remind/#{TabWeb.GroupData.party_key(debtor)}",
+      statement,
+      ~p"/s/not-a-real-token",
       ~p"/profile",
       ~p"/users/settings",
       ~p"/welcome",

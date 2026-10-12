@@ -1,0 +1,62 @@
+<Layouts.app flash={@flash} current_scope={@current_scope}>
+  <.header>
+    {@s["recipient"]}, {month(@s["period_start"])}
+    <:subtitle>
+      Your bills and payments with {@s["group"]}, from Tab. Anyone with this link can open
+      this page, so keep it to yourself.
+    </:subtitle>
+  </.header>
+
+  <.card title="Where you stand today" id="standing">
+    <p :if={@s["standing"] == []} class="text-ink-soft">You're even with everyone.</p>
+    <ul class="divide-y divide-line">
+      <li :for={b <- @s["standing"]} class="flex justify-between gap-4 py-2">
+        <span :if={b["owes"]}>You owe {b["other"]}</span>
+        <span :if={!b["owes"]}>{b["other"]} owes you</span>
+        <.money cents={b["amount_cents"]} class="font-semibold" />
+      </li>
+    </ul>
+  </.card>
+
+  <.card title="Bills this month" id="expenses">
+    <p :if={@s["expenses"] == []} class="text-ink-soft">No bills with you in them this month.</p>
+    <ul class="divide-y divide-line">
+      <li :for={e <- @s["expenses"]} class="py-2">
+        <div class="flex justify-between gap-4">
+          <span class="font-semibold">{e["description"]}</span>
+          <span>
+            <span class="text-sm text-ink-soft">your share</span>
+            <.money cents={e["share_cents"]} class="font-semibold" />
+          </span>
+        </div>
+        <span class="block text-sm text-ink-soft">
+          {date(e["date"])} · <.money cents={e["amount_cents"]} />
+          in all · {if e["paid_by_recipient"], do: "you paid", else: "#{e["paid_by"]} paid"}
+          <span :if={e["category"]}>· {e["category"]}</span>
+        </span>
+      </li>
+    </ul>
+  </.card>
+
+  <.card title="Payments this month" id="payments">
+    <p :if={@s["payments"] == []} class="text-ink-soft">No payments this month.</p>
+    <ul class="divide-y divide-line">
+      <li :for={p <- @s["payments"]} class="flex justify-between gap-4 py-2">
+        <span>
+          {if p["direction"] == "paid",
+            do: "You paid #{p["other"]}",
+            else: "#{p["other"]} paid you"}
+          <span class="block text-sm text-ink-soft">
+            {date(p["date"])} · {method_label(p["method"])}
+            <span :if={p["status"] == "pending"}>· waiting to be confirmed</span>
+          </span>
+        </span>
+        <.money cents={p["amount_cents"]} class={p["status"] == "pending" && "text-ink-soft"} />
+      </li>
+    </ul>
+  </.card>
+
+  <p class="text-sm text-ink-soft">
+    This link works until {date(String.slice(@s["expires_at"], 0, 10))}.
+  </p>
+</Layouts.app>

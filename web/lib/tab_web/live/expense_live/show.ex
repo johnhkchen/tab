@@ -40,7 +40,12 @@ defmodule TabWeb.ExpenseLive.Show do
       <.card title="Shares" id="shares">
         <ul class="divide-y divide-line">
           <li :for={s <- @shares} class="flex justify-between gap-4 py-2">
-            <span>{GroupData.name(@data, GroupData.share_party(s))}</span>
+            <span>
+              {GroupData.name(@data, GroupData.share_party(s))}
+              <span :if={wait = @waits[GroupData.share_party(s)]} class="block text-sm text-ink-soft">
+                {wait_label(wait)}
+              </span>
+            </span>
             <.money cents={s.amount_cents} />
           </li>
         </ul>
@@ -83,6 +88,15 @@ defmodule TabWeb.ExpenseLive.Show do
 
     {:ok, history} = Ledger.history(scope, data.group.id, row_id: expense.id)
 
+    # How long each share has waited, or waited, to be paid back.
+    waits =
+      if expense.deleted_at || expense.visibility == "private" do
+        %{}
+      else
+        {:ok, walk} = Ledger.float(scope, data.group.id)
+        for {{id, party}, wait} <- walk.shares, id == expense.id, into: %{}, do: {party, wait}
+      end
+
     can_edit =
       !data.archived? and is_nil(expense.deleted_at) and
         (expense.created_by == data.me or (data.admin? and expense.visibility == "shared"))
@@ -93,6 +107,7 @@ defmodule TabWeb.ExpenseLive.Show do
        expense: expense,
        shares: Enum.sort_by(expense.shares, &GroupData.name(data, GroupData.share_party(&1))),
        history: history,
+       waits: waits,
        can_edit: can_edit,
        page_title: expense.description
      )}
@@ -112,6 +127,12 @@ defmodule TabWeb.ExpenseLive.Show do
          put_flash(socket, :error, "You can't delete this one. Its creator or an admin can.")}
     end
   end
+
+  defp wait_label(%{open_cents: 0, days: 0}), do: "paid back the same day"
+  defp wait_label(%{open_cents: 0, days: 1}), do: "paid back after 1 day"
+  defp wait_label(%{open_cents: 0, days: d}), do: "paid back after #{d} days"
+  defp wait_label(%{days: 1}), do: "waiting 1 day so far"
+  defp wait_label(%{days: d}), do: "waiting #{d} days so far"
 
   defp actor(_data, nil), do: "Tab"
   defp actor(data, id), do: GroupData.name_user(data, id)

@@ -71,7 +71,7 @@ defmodule Tab.Bills.Template do
         changeset
 
       %{"type" => type} = split when type in ~w(equal exact percentage shares) ->
-        case Split.weights(split, 1_000_00) do
+        case Split.weights(split, sample_amount(split)) do
           {:ok, _} -> changeset
           {:error, reason} -> add_error(changeset, :default_split, reason)
         end
@@ -84,4 +84,17 @@ defmodule Tab.Bills.Template do
         )
     end
   end
+
+  # An exact split is checked against its own total; the others don't need one.
+  defp sample_amount(%{"type" => "exact", "entries" => entries}) do
+    case Enum.map(entries, & &1["value"]) do
+      values when values != [] ->
+        if Enum.all?(values, &(is_integer(&1) and &1 >= 0)), do: max(Enum.sum(values), 1), else: 1
+
+      _ ->
+        1
+    end
+  end
+
+  defp sample_amount(_), do: nil
 end

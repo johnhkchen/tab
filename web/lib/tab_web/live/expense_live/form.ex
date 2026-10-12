@@ -3,10 +3,16 @@ defmodule TabWeb.ExpenseLive.Form do
   Add or edit an expense: what it was, how much, who paid, who's in, and how
   to split it. Each person's share is worked out as you type, with the same
   `Tab.Ledger.Split` the ledger uses, so what you see is what gets saved.
+
+  Adding one suggests a split until you change the split yourself: a bill's
+  usual split, or a temporary split for its dates, prorated by day when the
+  bill covers a period (`Tab.Bills.Suggest`). `?template=` fills the form in
+  from a recurring bill.
   """
   use TabWeb, :live_view
 
-  alias Tab.Ledger
+  alias Tab.{Bills, Ledger}
+  alias Tab.Bills.Suggest
   alias Tab.Ledger.Split
   alias TabWeb.{Format, GroupData}
 
@@ -78,6 +84,39 @@ defmodule TabWeb.ExpenseLive.Form do
               value={@f["paid_by"]}
               errors={@errors[:paid_by] || []}
             />
+            <.input
+              :if={@f["private"] != "true"}
+              name="expense[period_start]"
+              id="expense_period_start"
+              type="date"
+              label="Bill covers, from (optional)"
+              value={@f["period_start"]}
+              errors={@errors[:period_start] || []}
+            />
+            <.input
+              :if={@f["private"] != "true"}
+              name="expense[period_end]"
+              id="expense_period_end"
+              type="date"
+              label="to"
+              value={@f["period_end"]}
+              errors={@errors[:period_end] || []}
+            />
+          </div>
+          <div :if={@amount_check} id="amount-check" class="clay-well mb-4 p-4">
+            <p class="mb-2">
+              {@template.name} is usually
+              <.money cents={@template.last_amount_cents} class="font-semibold" />.
+              This is <.money cents={@amount_check} class="font-semibold" />.
+            </p>
+            <.input
+              name="expense[amount_changed]"
+              id="expense_amount_changed"
+              type="checkbox"
+              label="Yes, the amount changed"
+              value={@f["amount_changed"]}
+              errors={@errors[:amount_changed] || []}
+            />
           </div>
           <.input
             name="expense[private]"
@@ -89,6 +128,7 @@ defmodule TabWeb.ExpenseLive.Form do
         </.card>
 
         <.card :if={@f["private"] != "true"} title="Who's in, and how to split it">
+          <p :if={@why} id="suggestion" class="clay-well mb-3 p-3 text-sm">{why_text(@why, @data)}</p>
           <.input
             name="expense[split_type]"
             id="expense_split_type"
@@ -171,23 +211,64 @@ defmodule TabWeb.ExpenseLive.Form do
     data = GroupData.load!(scope, group_id)
     if data.archived?, do: raise(GroupData.NotFound)
 
-    {expense, state} =
+    {expense, template, state} =
       case params do
         %{"id" => id} ->
           expense = fetch_expense!(scope, data, id)
-          {expense, state_from(expense, data)}
+          {expense, nil, state_from(expense, data)}
+
+        %{"template" => id} ->
+          template = fetch_template!(scope, data, id)
+          {nil, template, from_template(new_state(data), template, data)}
 
         _ ->
-          {nil, new_state(data)}
+          {nil, nil, new_state(data)}
       end
+
+    {:ok, overrides} = Bills.list_overrides(scope, data.group.id)
 
     {:ok,
      socket
      |> assign(data: data, expense: expense, errors: %{}, types: @types, rest_types: @rest_types)
+     |> assign(template: template, overrides: overrides, suggesting: expense == nil, why: nil)
      |> assign(state)
      |> assign(page_title: if(expense, do: "Edit expense", else: "Add an expense"))
+     |> suggest()
      |> preview()}
   end
+
+  defp fetch_template!(scope, data, id) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         {:ok, %{group_id: group_id, deleted_at: nil} = t} when group_id == data.group.id <-
+           Bills.get_template(scope, id) do
+      t
+    else
+      _ -> raise GroupData.NotFound
+    end
+  end
+
+  # The template's answers in place of the blank form's.
+  defp from_template(state, t, data) do
+    pre = Bills.prefill(t)
+    {from, to} = pre.period || {nil, nil}
+    members = MapSet.new(data.members, & &1.user_id)
+
+    f =
+      Map.merge(state.f, %{
+        "description" => pre.description,
+        "amount" => Format.amount_input(pre.amount_cents),
+        "date" => Date.to_iso8601(pre.date),
+        "category_id" => pre.category_id || "",
+        "paid_by" => if(MapSet.member?(members, pre.paid_by), do: pre.paid_by, else: data.me),
+        "period_start" => iso(from),
+        "period_end" => iso(to)
+      })
+
+    %{state | f: f}
+  end
+
+  defp iso(nil), do: ""
+  defp iso(date), do: Date.to_iso8601(date)
 
   defp fetch_expense!(scope, data, id) do
     with {:ok, _} <- Ecto.UUID.cast(id),
@@ -212,7 +293,10 @@ defmodule TabWeb.ExpenseLive.Form do
         "paid_by" => data.me,
         "private" => "false",
         "split_type" => "equal",
-        "rest_type" => "equal"
+        "rest_type" => "equal",
+        "period_start" => "",
+        "period_end" => "",
+        "amount_changed" => "false"
       },
       # Members start in; counterparties start out.
       included: Map.new(keys, &{&1, String.starts_with?(&1, "user:")}),
@@ -222,7 +306,27 @@ defmodule TabWeb.ExpenseLive.Form do
   end
 
   defp state_from(e, data) do
-    split = e.split
+    split_state = split_state(e.split, data)
+
+    split_state
+    |> Map.drop([:split_type, :rest_type])
+    |> Map.put(:f, %{
+      "description" => e.description,
+      "amount" => Format.amount_input(e.amount_cents),
+      "date" => Date.to_iso8601(e.date),
+      "category_id" => e.category_id || "",
+      "paid_by" => e.paid_by,
+      "private" => to_string(e.visibility == "private"),
+      "split_type" => split_state.split_type,
+      "rest_type" => split_state.rest_type,
+      "period_start" => iso(e.period_start),
+      "period_end" => iso(e.period_end),
+      "amount_changed" => "false"
+    })
+  end
+
+  # The form's split fields for a stored split.
+  defp split_state(split, data) do
     {type, entries, rest} = {split["type"], split["entries"] || [], split["rest"]}
     value_entries = if type == "tiered", do: (rest || %{})["entries"] || [], else: entries
     value_type = if type == "tiered", do: (rest || %{})["type"], else: type
@@ -230,16 +334,8 @@ defmodule TabWeb.ExpenseLive.Form do
     in_split = MapSet.new(entries ++ value_entries, &entry_key/1)
 
     %{
-      f: %{
-        "description" => e.description,
-        "amount" => Format.amount_input(e.amount_cents),
-        "date" => Date.to_iso8601(e.date),
-        "category_id" => e.category_id || "",
-        "paid_by" => e.paid_by,
-        "private" => to_string(e.visibility == "private"),
-        "split_type" => type,
-        "rest_type" => if(type == "tiered", do: value_type, else: "equal")
-      },
+      split_type: type,
+      rest_type: if(type == "tiered", do: value_type, else: "equal"),
       included: Map.new(keys, &{&1, MapSet.member?(in_split, &1)}),
       values: Map.new(value_entries, &{entry_key(&1), display_value(value_type, &1["value"])}),
       fixed:
@@ -259,14 +355,22 @@ defmodule TabWeb.ExpenseLive.Form do
 
   @impl true
   def handle_event("change", params, socket) do
-    {:noreply, socket |> assign(read(params, socket.assigns)) |> preview()}
+    state = read(params, socket.assigns)
+
+    socket =
+      if split_edited?(socket.assigns, state),
+        do: assign(socket, suggesting: false, why: nil),
+        else: socket
+
+    {:noreply, socket |> assign(state) |> suggest() |> preview()}
   end
 
   def handle_event("save", params, socket) do
     socket = socket |> assign(read(params, socket.assigns)) |> preview()
     scope = socket.assigns.current_scope
 
-    with {:ok, attrs} <- attrs(socket.assigns),
+    with :ok <- amount_confirmed(socket.assigns),
+         {:ok, attrs} <- attrs(socket.assigns),
          {:ok, expense} <- persist(scope, socket.assigns, attrs) do
       {:noreply,
        socket
@@ -288,8 +392,8 @@ defmodule TabWeb.ExpenseLive.Form do
     end
   end
 
-  defp persist(scope, %{expense: nil, data: data}, attrs),
-    do: Ledger.create_expense(scope, data.group.id, attrs)
+  defp persist(scope, %{expense: nil, data: data, template: t}, attrs),
+    do: Ledger.create_expense(scope, data.group.id, Map.put(attrs, :template_id, t && t.id))
 
   defp persist(scope, %{expense: e}, attrs), do: Ledger.update_expense(scope, e.id, attrs)
 
@@ -309,6 +413,8 @@ defmodule TabWeb.ExpenseLive.Form do
   end
 
   defp preview(socket) do
+    socket = assign(socket, amount_check: amount_check(socket.assigns))
+
     with {:ok, amount} <- Format.parse_money(socket.assigns.f["amount"]),
          true <- amount > 0,
          {:ok, split} <- build_split(socket.assigns),
@@ -326,6 +432,94 @@ defmodule TabWeb.ExpenseLive.Form do
         assign(socket, preview_by_key: %{}, split_error: nil)
     end
   end
+
+  # -- Suggesting a split ------------------------------------------------------------
+
+  # Whether this change touched the split itself, rather than what the bill is.
+  defp split_edited?(before, now) do
+    Map.take(before.f, ~w(split_type rest_type)) != Map.take(now.f, ~w(split_type rest_type)) or
+      Enum.any?([:included, :values, :fixed], &(non_blank(before[&1]) != non_blank(now[&1])))
+  end
+
+  defp non_blank(map), do: map |> Enum.reject(fn {_, v} -> v in ["", false] end) |> Map.new()
+
+  # Until the person edits the split, follow the bill's usual split and any
+  # temporary split for its dates.
+  defp suggest(%{assigns: %{suggesting: false}} = socket), do: socket
+
+  defp suggest(socket) do
+    %{data: data, f: f, template: template, overrides: overrides} = socket.assigns
+    normal = Bills.normal_split(template, Enum.map(data.members, & &1.user_id))
+
+    bill = %{
+      category_id: blank_to_nil(f["category_id"]),
+      date: date(f["date"]),
+      period: period(f),
+      amount_cents:
+        case Format.parse_money(f["amount"]) do
+          {:ok, n} when n > 0 -> n
+          _ -> nil
+        end
+    }
+
+    {split, why} = Suggest.suggest(normal, overrides, bill)
+    state = split_state(split, data)
+
+    assign(socket,
+      why: why,
+      f: %{f | "split_type" => state.split_type, "rest_type" => state.rest_type},
+      included: state.included,
+      values: state.values,
+      fixed: state.fixed
+    )
+  end
+
+  defp date(text) do
+    case Date.from_iso8601(text || "") do
+      {:ok, d} -> d
+      _ -> nil
+    end
+  end
+
+  defp period(f) do
+    with %Date{} = from <- date(f["period_start"]),
+         %Date{} = to <- date(f["period_end"]),
+         true <- Date.compare(from, to) != :gt do
+      {from, to}
+    else
+      _ -> nil
+    end
+  end
+
+  defp why_text({:override, o}, _data),
+    do:
+      "#{o.note || "A temporary split"} covers this date, so Tab splits it that way. Change it if you like."
+
+  defp why_text({:prorated, pieces, total}, _data) do
+    parts =
+      Enum.map_join(pieces, " and ", fn {o, days} ->
+        "#{o.note || "a temporary split"} for #{days} of its #{total} days"
+      end)
+
+    "This bill covers #{parts}, so Tab blends the split by day. Change it if you like."
+  end
+
+  # A fixed bill logged at a different amount needs a tick to confirm.
+  defp amount_confirmed(%{amount_check: nil}), do: :ok
+  defp amount_confirmed(%{f: %{"amount_changed" => "true"}}), do: :ok
+
+  defp amount_confirmed(_),
+    do: {:error, {:field, :amount_changed, "tick this to save a different amount"}}
+
+  defp amount_check(%{template: %{stability: "fixed", last_amount_cents: last}, f: f})
+       when is_integer(last) do
+    case Format.parse_money(f["amount"]) do
+      {:ok, n} when n > 0 and n != last -> n
+      _ -> nil
+    end
+  end
+
+  defp amount_check(_), do: nil
 
   # -- Building the split ----------------------------------------------------------
 
@@ -425,7 +619,9 @@ defmodule TabWeb.ExpenseLive.Form do
          category_id: blank_to_nil(f["category_id"]),
          paid_by: if(private?, do: data.me, else: f["paid_by"]),
          visibility: if(private?, do: "private", else: "shared"),
-         split: split
+         split: split,
+         period_start: if(private?, do: nil, else: blank_to_nil(f["period_start"])),
+         period_end: if(private?, do: nil, else: blank_to_nil(f["period_end"]))
        }}
     else
       {:amount, _} -> {:error, {:field, :amount_cents, "type an amount, like 12.50"}}

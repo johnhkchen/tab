@@ -81,6 +81,22 @@ defmodule Tab.BillsTest do
                Bills.create_template(user_scope_fixture(), ctx.house.id, %{name: "Water"})
     end
 
+    test "rent split by exact amounts is a valid bill split", ctx do
+      split = %{
+        "type" => "exact",
+        "entries" => [
+          %{"user_id" => ctx.p, "value" => 140_000},
+          %{"user_id" => ctx.s, "value" => 110_000}
+        ]
+      }
+
+      assert {:ok, _} =
+               Bills.create_template(ctx.priya, ctx.house.id, %{
+                 name: "Rent",
+                 default_split: split
+               })
+    end
+
     test "an unknown split shape is refused before the database sees it", ctx do
       assert {:error, cs} =
                Bills.create_template(ctx.priya, ctx.house.id, %{

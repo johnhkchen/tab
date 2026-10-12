@@ -2,6 +2,27 @@
 
 What changed in each version of Tab, newest first.
 
+## [Unreleased]
+
+Bills that come back, people who go away, and asking for money without the awkward text.
+
+### Added
+- Bills: set up rent, internet, or any bill that comes back once, then log each
+  one in a tap. Tab fills in the last amount, the day autopay takes it, and the
+  dates it covers. A bill that stays the same asks you to confirm a new amount.
+- Temporary splits: when someone's away or a guest stays, admins set a
+  different split for a category and dates. It stops on its own. Two that
+  overlap get saved side by side once an admin confirms how.
+- The add-expense form suggests the split: the bill's usual one, or a
+  temporary one, blended by day when the bill covers part of the time away.
+- How long money waits: days between paying for everyone and getting paid
+  back, for each person and each share. Days only, no interest.
+- Ask for it: a Venmo note, a text, and an email for money someone owes you,
+  ready to copy. Tab doesn't send them.
+- Statement links: one person's month on a page they open without signing in.
+  It shows only their own bills and payments, lasts 30 days, and anyone in the
+  group can turn it off.
+
 ## [0.2.0] - 2026-10-12
 
 The ledger and the web app: you can run your house's shared expenses on it.

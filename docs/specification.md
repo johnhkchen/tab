@@ -413,6 +413,10 @@ stand today with each person they owe or who owes them.
   someone left out of either stays out. Confirming trims and splits the
   existing rows and inserts the pieces in one transaction. If nobody is left in
   both, there's no suggestion, and the admin writes the split for those days.
+  Combining needs both to cover the same bills: when one covers every category
+  and the other one category, the page says so and the admin changes one first.
+  Editing an existing override into an overlap gets no combined suggestion,
+  only the clash.
 
 ### Which split the form suggests
 
@@ -469,7 +473,9 @@ Revoke.
 
 ### Statement page
 
-`/s/:token`, no sign-in, outside the signed-in pages: the month's activity for
+`/s/:token`, no sign-in, outside the signed-in pages, sent with
+`cache-control: no-store`, `referrer-policy: no-referrer`, and
+`x-robots-tag: noindex`, since the token is in the URL: the month's activity for
 one person, as `read_statement` returns it, on the clay kit, at 360 px. An
 expired, revoked, or unknown link shows one plain "This link doesn't work
 anymore" page with a 404, whichever it was.

@@ -32,7 +32,7 @@ Sign-in, groups, adding expenses, balances (overall and per category), settling 
 with confirmation, payment methods, CSV export, and email notifications.
 Spec: [specification.md §Phase 2](specification.md#phase-2-the-web-app-people-use).
 
-## Phase 3: Recurring bills and household tools (in progress)
+## Phase 3: Recurring bills and household tools (done, 2026-10-13, not yet released)
 
 Recurring templates and one-tap logging, time-bound split overrides with day-based
 proration, float tracking (days money sits before it's repaid), reminder drafts

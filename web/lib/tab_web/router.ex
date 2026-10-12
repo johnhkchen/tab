@@ -66,6 +66,9 @@ defmodule TabWeb.Router do
       live "/groups/:group_id", GroupLive.Show, :show
       live "/groups/:group_id/members", GroupLive.Members, :show
       live "/groups/:group_id/settle", GroupLive.Settle, :show
+      live "/groups/:group_id/bills", GroupLive.Bills, :show
+      live "/groups/:group_id/temporary", GroupLive.Temporary, :show
+      live "/groups/:group_id/remind/:party", GroupLive.Remind, :show
       live "/groups/:group_id/expenses/new", ExpenseLive.Form, :new
       live "/groups/:group_id/expenses/:id", ExpenseLive.Show, :show
       live "/groups/:group_id/expenses/:id/edit", ExpenseLive.Form, :edit
@@ -83,6 +86,9 @@ defmodule TabWeb.Router do
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
     end
+
+    # A statement link: no sign-in, the token decides (Tab.Statements).
+    get "/s/:token", StatementController, :show
 
     post "/users/log-in", UserSessionController, :create
     delete "/users/log-out", UserSessionController, :delete

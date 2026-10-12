@@ -21,6 +21,13 @@ defmodule TabWeb.GroupLive.Show do
         </:actions>
       </.header>
 
+      <nav class="flex flex-wrap gap-2 text-sm" id="group-nav">
+        <.link navigate={~p"/groups/#{@data.group}/bills"} class="clay-chip px-3 py-1">Bills</.link>
+        <.link navigate={~p"/groups/#{@data.group}/temporary"} class="clay-chip px-3 py-1">
+          Temporary splits
+        </.link>
+      </nav>
+
       <div :if={@data.archived?} id="archived" class="clay-well p-4">
         This group is archived: you can read everything, but nothing can change.
         <button :if={@data.admin?} phx-click="unarchive" class="ml-1 font-semibold underline">
@@ -73,6 +80,14 @@ defmodule TabWeb.GroupLive.Show do
             <p :if={b.debtor == {:user, @data.me}} class="mt-1 text-sm text-ink-soft">
               {pay_hint(@data, b.creditor)}
             </p>
+            <p :if={b.creditor == {:user, @data.me}} class="mt-1 text-sm">
+              <.link
+                navigate={~p"/groups/#{@data.group}/remind/#{GroupData.party_key(b.debtor)}"}
+                class="underline"
+              >
+                Ask for it
+              </.link>
+            </p>
           </li>
         </ul>
 
@@ -94,6 +109,19 @@ defmodule TabWeb.GroupLive.Show do
             A payment counts here only if whoever recorded it picked the category.
           </p>
         </div>
+      </.card>
+
+      <.card :if={@waits != []} title="How long money waits" id="float">
+        <p class="mb-2 text-sm text-ink-soft">
+          Days between paying for everyone and getting the rest back, on average.
+          Days only, no interest.
+        </p>
+        <ul class="divide-y divide-line">
+          <li :for={{party, days} <- @waits} class="flex justify-between gap-4 py-2">
+            <span>{GroupData.name(@data, party)}</span>
+            <span class="money">{days_label(days)}</span>
+          </li>
+        </ul>
       </.card>
 
       <.card title="Lately" id="activity">
@@ -162,12 +190,19 @@ defmodule TabWeb.GroupLive.Show do
     {:ok, pending} = Ledger.pending_for_me(scope, group_id)
     {:ok, category_balances} = Ledger.category_balances(scope, group_id)
     {:ok, activity} = Ledger.activity(scope, group_id)
+    {:ok, walk} = Ledger.float(scope, group_id)
+
+    waits =
+      walk.by_creditor
+      |> Enum.filter(fn {party, _} -> match?({:user, _}, party) end)
+      |> Enum.sort_by(fn {party, _} -> GroupData.name(socket.assigns.data, party) end)
 
     assign(socket,
       balances: GroupData.balances(scope, socket.assigns.data),
       category_balances: category_balances,
       pending: pending,
-      activity: activity
+      activity: activity,
+      waits: waits
     )
   end
 
@@ -216,4 +251,7 @@ defmodule TabWeb.GroupLive.Show do
   end
 
   defp pay_hint(_, _), do: nil
+
+  defp days_label(1), do: "1 day"
+  defp days_label(n), do: "#{n} days"
 end

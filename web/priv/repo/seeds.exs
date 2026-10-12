@@ -109,3 +109,57 @@ else
   {:ok, _} = Groups.create_group(ps, %{name: "Ski trip"})
   IO.puts("Demo data added. Sign in as priya@example.com.")
 end
+
+# Phase 3 demo: recurring bills and a temporary split. Added once, also to demo
+# data made before phase 3.
+priya = Repo.get_by!(User, email: "priya@example.com")
+ps = Scope.for_user(priya)
+{:ok, groups} = Groups.list_groups(ps)
+house = Enum.find(groups, &(&1.name == "Elm Street house"))
+{:ok, bills} = Tab.Bills.list_templates(ps, house.id)
+
+if bills == [] do
+  {:ok, members} = Groups.list_members(ps, house.id)
+  {:ok, categories} = Groups.list_categories(ps, house.id)
+  cat = fn name -> Enum.find(categories, &(&1.name == name)).id end
+  id = fn name -> Enum.find(members, &(&1.profile.display_name == name)).user_id end
+
+  {:ok, _} =
+    Tab.Bills.create_template(ps, house.id, %{
+      name: "Rent",
+      category_id: cat.("Rent"),
+      stability: "fixed",
+      autopay_day: 1,
+      default_payer: priya.id,
+      default_split: %{
+        "type" => "exact",
+        "entries" => [
+          %{"user_id" => priya.id, "value" => 140_000},
+          %{"user_id" => id.("Sam"), "value" => 110_000},
+          %{"user_id" => id.("Jo"), "value" => 110_000}
+        ]
+      }
+    })
+
+  {:ok, _} =
+    Tab.Bills.create_template(ps, house.id, %{
+      name: "Internet",
+      category_id: cat.("Internet"),
+      autopay_day: 15,
+      default_payer: id.("Sam")
+    })
+
+  {:ok, _} =
+    Tab.Bills.create_override(ps, house.id, %{
+      category_id: cat.("Utilities"),
+      effective_from: ~D[2026-11-01],
+      effective_until: ~D[2026-11-30],
+      note: "Jo away",
+      split: %{
+        "type" => "equal",
+        "entries" => [%{"user_id" => priya.id}, %{"user_id" => id.("Sam")}]
+      }
+    })
+
+  IO.puts("Demo bills added.")
+end

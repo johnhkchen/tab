@@ -8,6 +8,66 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
+## 2026-10-13: phase 3 built (bills, temporary splits, float, drafts, statements)
+
+### Done
+- Distilled phase 3 into `docs/specification.md` (commit `eb9fdec`) and built it.
+- Database (`20261012160000_create_household_tools.exs`): `recurring_templates`,
+  `split_overrides`, `statement_links`, each with one policy per verb, stamping,
+  and audit; `expenses.template_id` with `last_amount_cents`/`last_logged_on`
+  kept by a trigger; overlapping overrides refused under a per-group advisory
+  lock (hint `override_overlap`); `read_statement(token)`, `SECURITY DEFINER`,
+  called as nobody through the new `Tab.Repo.as_nobody/1`.
+- Elixir: `Tab.Bills` (templates, overrides, the combine plan),
+  `Tab.Bills.Dates`, `Tab.Bills.Suggest` (suggested and day-prorated splits),
+  `Tab.Ledger.Float` (oldest-first walk), `Tab.Reminders`, `Tab.Statements`,
+  `Split.weights/2`.
+- Pages: Bills, Temporary splits, Ask for it (`/groups/:id/remind/:party`), the
+  public statement page `/s/:token`; the add-expense form takes `?template=`,
+  suggests splits with the reason, has "Bill covers" dates, and asks to confirm
+  a new amount on a fixed bill; the group page shows how long money waits and
+  "Ask for it"; the expense page shows days per share. `TabWeb.SplitEditor` is
+  the shared split editor for bills and temporary splits.
+- Seeds add two demo bills and a temporary split (also to older demo data).
+  `/dev/narrow` covers the six new pages; 18 of 18 fit 360 px. Screenshot
+  canvas in `scripts/check-narrow` is now 1580×4000.
+- 319 web tests (was 256). `mise run check` and `check:narrow` pass.
+
+### Decided
+- The maintainer picked all four recommended options for phase 3: a bill's
+  normal split is its template's, else even among current members; overlapping
+  temporary splits are refused by the database and combined on save after the
+  admin confirms; float matches payments to shares oldest first; any member can
+  make a 30-day statement link for anyone in the group, and anyone can revoke it.
+- Override splits are `equal`, `percentage`, or `shares` only; templates also
+  allow `exact`; prorated suggestions save as `shares` in lowest terms.
+- Combining two overrides works only when both cover the same bills (spec
+  updated). Cadence adds `quarterly` beyond the long-form spec's list.
+
+### State of the world
+- Nothing outside the repo changed. Not released: CHANGELOG has an
+  Unreleased section; the version is still 0.2.0 everywhere.
+
+### Gotchas
+- `Phoenix.LiveViewTest` doesn't send `_target` from `form |> render_change`,
+  so the form tells a split edit from other edits by comparing the split fields
+  before and after, not by `_target`.
+- A template's `exact` split has no bill amount to check against; validate it
+  against its own sum (the seeds caught a $3,600 rent failing a $1,000 sample).
+- `~w(...)` ends at the first `)`, so function signatures like `f(uuid, jsonb)`
+  can't go in one. A migration that fails to compile makes `ecto.rollback` roll
+  back the previous migration instead.
+- Payment events in the float walk point the other way: a payment from A to B
+  means B owes A back. An overpayment covers A's next share ahead of time.
+
+### Next
+- Release v0.3.0 (bump the four version places, tag, website docs for bills,
+  temporary splits, and statement links), when the maintainer says so.
+- Then phase 4: distill bill reading from `working_specification.md`, and decide
+  open question 1 (self-host inbound mail).
+
+---
+
 ## 2026-10-12: v0.1.0 and v0.2.0 released; phases 1 and 2 built
 
 ### Done
