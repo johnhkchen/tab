@@ -40,6 +40,7 @@ Put these in a file called `.env` next to `compose.yaml` if you need them:
 | Setting             | What it's for                                                     | Default     |
 | ------------------- | ----------------------------------------------------------------- | ----------- |
 | `PORT`              | The port Tab is reachable on.                                     | `4000`      |
+| `TAB_LISTEN`        | Which address Tab listens on. Use `127.0.0.1` behind a reverse proxy, or on a server that runs other things. | `0.0.0.0` (every address) |
 | `PHX_HOST`          | The address people type to reach Tab.                             | `localhost` |
 | `POSTGRES_PASSWORD` | The database password. Set it before the first start.             | `postgres`  |
 | `SECRET_KEY_BASE`   | Signs logins. Leave it out and Tab makes one on first start.      | (made for you) |
