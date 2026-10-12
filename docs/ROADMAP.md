@@ -19,7 +19,7 @@ Everything the ledger stands on, with nothing to log expenses with yet.
 - `mise` toolchain and tasks, CI, tag-driven releases to GHCR.
 - Public website at tab.b28.dev, admin behind Cloudflare Access.
 
-## Phase 1: The ledger, enforced by the database (next)
+## Phase 1: The ledger, enforced by the database (in progress)
 
 Groups, members, invites, expenses with every split type, payments, external
 counterparties, private expenses, and the audit log, each with row-level security
@@ -43,8 +43,9 @@ for Venmo, text, and email, and per-recipient statement links.
 Forwarded email, receipt photos, and PDFs, read by the `extract/` service into
 pending items a person confirms. Bring-your-own AI key on self-host. Recurrence
 detection on top of phase 3's templates. The review-digest schedule. Inbound mail:
-Cloudflare Email Routing with a store-first R2 + Queue relay on Cloud, an in-app
-`gen_smtp` listener on self-host.
+Cloudflare Email Routing with a store-first R2 + Queue relay on Cloud; on
+self-host, polling a mailbox the person already has, or Resend's inbound
+webhooks (decided when phase 4 is specified; no in-app mail server).
 
 ## Phase 5: Use Tab from Claude (later)
 

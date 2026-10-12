@@ -36,6 +36,7 @@ Later phases get their own sections here when they're next.
 | Per-category payments | A payment may carry a category. Category balances net only payments tagged with that category; untagged payments reduce the overall balance only. |
 | Profiles vs. accounts | `users` (email, sign-in data) is visible only to its owner. `profiles` (display name, payment methods, reminder channel) is visible to anyone who shares an active group with that person. |
 | Audit log | Written by Postgres triggers, not app code, so no code path can skip it. |
+| Outbound mail | Resend through Swoosh's Resend adapter when `RESEND_API_KEY` is set (Cloud uses it, key in Doppler `tab/prd`). Generic SMTP (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`) for self-hosters who prefer it. With neither, mail goes to the server log, so a fresh install can still sign in, and the app warns at boot. Tab never runs a mail server for sending. Wired up in phase 2. |
 | Invites | Single-use and expiring (7 days by default), stored as a hash of the token, redeemed only through one database function that checks and consumes the invite atomically. |
 
 ## Phase 1: The ledger, enforced by the database
@@ -277,3 +278,8 @@ caps on any plan.
    specific expenses, so nothing breaks.
 3. **Deleting a whole group.** Default: admins can archive a group (soft delete).
    Members can still export their own data from an archived group.
+4. **Receiving mail on self-host (phase 4).** The long-form spec has an in-app
+   `gen_smtp` listener, which makes Tab a mail server (MX records, port 25, spam).
+   Default until phase 4: replace it with polling a mailbox the self-hoster
+   already has (IMAP), or Resend's inbound webhooks if they hold up. Decide when
+   phase 4 is specified.

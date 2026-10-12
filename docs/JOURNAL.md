@@ -45,7 +45,13 @@ this repo), **Gotchas**, **Next**.
   failover.
 - **Inbound mail:** Cloud uses Cloudflare Email Routing with a store-first R2 +
   Queue relay; self-host uses an in-app `gen_smtp` listener. Mail is acknowledged
-  only after it's committed to Postgres. Mailgun dropped.
+  only after it's committed to Postgres. Mailgun dropped. *Revised the same
+  day:* self-host won't run its own mail server either; it'll poll an existing
+  mailbox (IMAP) or use Resend's inbound webhooks. Decided in phase 4.
+- **Outbound mail:** Resend (Swoosh's Resend adapter), "for now, at least until
+  there's a problem." Generic SMTP for self-hosters who want it; with neither,
+  sign-in links go to the server log. Wired up in phase 2. Until then, prod
+  can't send magic links.
 - **Secrets:** Doppler project `tab` (configs `dev`, `stg`, `prd`). Self-hosters
   can still use `.env`.
 - **Launch order for billing (phase 6):** plans + trial + extensions first;
