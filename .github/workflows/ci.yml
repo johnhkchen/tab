@@ -36,7 +36,7 @@ jobs:
       - run: mix deps.get
         working-directory: web
       # Postgres comes from the service container above, so skip the local `db` task.
-      - run: mise run --skip-deps check:web ::: check:extract ::: version:check
+      - run: "mise run --skip-deps check:web ::: check:extract ::: version:check"
 
   site:
     name: website builds
@@ -55,7 +55,7 @@ jobs:
         timeout-minutes: 15
       - name: Health check
         run: |
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             body=$(curl -fsS localhost:4000/healthz) && break
             sleep 2
           done
