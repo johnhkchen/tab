@@ -23,6 +23,8 @@ row-level security. Monorepo:
   never implies another's. `tab_user` has no DELETE: the ledger keeps history.
 - **Extraction only proposes.** `extract/` gets no database credentials and no write
   path. Anything it returns lands as a pending item a person confirms.
+- **Inbound mail is acknowledged only after it's committed to Postgres** (HTTP 2xx to the
+  Cloudflare relay, `250` from the SMTP listener). Otherwise answer "try again later".
 - **Nothing in the ledger may require AI.** `/healthz` stays 200 when extract is down.
 - **Versions live in four places** (`web/mix.exs`, `extract/baml_src/main.baml`,
   `compose.yaml`, `CHANGELOG.md`); `mise run version:check` keeps them in step.
