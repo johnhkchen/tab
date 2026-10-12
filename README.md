@@ -33,7 +33,7 @@ You need [mise](https://mise.jdx.dev) and Docker.
 mise install       # Erlang, Elixir, and BAML, at the pinned versions
 mise run setup     # start Postgres, fetch dependencies, create the database
 mise run dev       # web app on :4000, extraction service on :4100
-mise run site:dev  # the public website, with live reload
+mise run site:dev  # the public website, with live reload and its pages filled in
 mise run check     # everything CI checks; green here means green there
 ```
 
@@ -45,7 +45,7 @@ mise run check     # everything CI checks; green here means green there
 | ---------- | ----------------------------------------------------------------------------- |
 | `web/`     | The app people use. Elixir + Phoenix, on Postgres with row-level security.    |
 | `extract/` | Reads bills and receipts and suggests entries. Written in BAML. It can't touch the database, so a sneaky receipt can only ever suggest, never write. |
-| `site/`    | The public website: landing page, pricing, and docs. Astro + Starlight, on Cloudflare Workers. |
+| `site/`    | The public website. Landing and pricing pages you edit in EmDash, docs in Markdown, prices in `site/src/data/plans.ts`. Astro on Cloudflare Workers. |
 | `scripts/` | Version check and release tagging.                                            |
 
 ## Privacy, checked by the database

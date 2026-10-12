@@ -7,8 +7,10 @@ row-level security. Monorepo:
 - `extract/` — BAML Language service (not Python/TS BAML). Read
   `extract/.claude/skills/baml-core/SKILL.md` before writing BAML; v1 syntax differs from
   older BAML. Run it with `baml-cli` (pinned in mise.toml), not the `baml` wrapper.
-- `site/` — the public website (landing, `/pricing`, Starlight docs under `/docs`), static
-  on Cloudflare Workers. Not shipped with the app: self-hosted copies never show Cloud pricing.
+- `site/` — the public website, one Cloudflare Worker. Landing and `/pricing` are EmDash pages
+  (D1 + R2, edited at `/_emdash/admin`, seeded from `site/seed/seed.json`). Docs under `/docs`
+  are Starlight Markdown in git, prerendered. Plan prices live only in `site/src/data/plans.ts`.
+  Read `site/AGENTS.md`. Not shipped with the app: self-hosted copies never show Cloud pricing.
 
 ## Commands
 
