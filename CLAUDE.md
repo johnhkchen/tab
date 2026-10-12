@@ -35,4 +35,6 @@ row-level security. Monorepo:
   No trial, gift, or referral ever charges. Reaching the reading allowance
   pauses reading; never a charge.
 - **UI uses the b28 clay kit** (vendored in `web/` and `site/`; refresh both with
-  `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`.
+  `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`, and every page or doc
+  people will read goes through the `stop-slop` skill
+  (`.claude/skills/stop-slop/`) before it ships.
