@@ -1,0 +1,279 @@
+# Specification: phases 1 and 2
+
+The buildable spec for the next two phases (see [ROADMAP.md](ROADMAP.md)). It
+distills the long-form product spec into decisions an engineer can build from.
+Where this file and the code disagree, fix one of them in the same commit.
+
+Later phases get their own sections here when they're next.
+
+## Ground rules (all phases)
+
+1. **The database is the enforcement point.** Every person-facing read and write
+   runs through `Tab.Repo.as_user/2`, which switches to the `tab_user` role so
+   row-level security applies. Code outside `Tab.Accounts` never queries person
+   data as the connection owner.
+2. **Every table has RLS enabled and an explicit policy for each of select,
+   insert, update, and delete**, written as SQL in its migration. One verb's
+   policy never stands in for another's. `tab_user` has no DELETE privilege
+   anywhere, so delete policies are written but no table grants delete.
+3. **No hard deletes.** Removing something sets `deleted_at`. Soft-deleted rows
+   drop out of balances and default views but stay in the audit log.
+4. **Balances are computed, never stored.** No "settled" flags, no cached totals
+   that clients can write.
+5. **Nothing in the ledger needs AI, an API key, or the extraction service.**
+6. **IDs are UUIDs** (`binary_id`), because `auth.uid()` returns a UUID.
+
+## Decisions settled for these phases
+
+| Question | Decision |
+|---|---|
+| Sign-in | `mix phx.gen.auth` with email magic links as the main way in (no password needed). Passwords optional for people who want one. Sessions are cookies. |
+| Money | Whole cents in `bigint` columns named `*_cents`. One currency per instance, set by `TAB_CURRENCY` (default `USD`). No multi-currency. |
+| Rounding | Shares are computed in cents. Each participant gets the floor of their exact share; the cents left over go one at a time to the participants with the largest fractional remainders, ties broken by participant order in the split. Shares always sum to the expense amount exactly. |
+| Stored shares | When an expense is saved, its computed per-person amounts are written to `expense_shares`. The split definition is stored too, so the expense can be edited and re-split. |
+| Categories | A `categories` table per group, seeded with Rent, Utilities, Internet, Groceries, Dining, Travel, Other. Groups can add and rename. |
+| Who can pay an expense | A group member. Participants in a split can be members or external counterparties. |
+| Per-category payments | A payment may carry a category. Category balances net only payments tagged with that category; untagged payments reduce the overall balance only. |
+| Profiles vs. accounts | `users` (email, sign-in data) is visible only to its owner. `profiles` (display name, payment methods, reminder channel) is visible to anyone who shares an active group with that person. |
+| Audit log | Written by Postgres triggers, not app code, so no code path can skip it. |
+| Invites | Single-use and expiring (7 days by default), stored as a hash of the token, redeemed only through one database function that checks and consumes the invite atomically. |
+
+## Phase 1: The ledger, enforced by the database
+
+### Tables
+
+All group-scoped tables carry `group_id` and `inserted_at`/`updated_at`. Ledger
+tables also carry `created_by` (a user id, set from `auth.uid()` by a default or
+trigger, never trusted from the client) and `deleted_at`.
+
+**users** (from `phx.gen.auth`, `--binary-id`): `id`, `email` (citext, unique),
+`confirmed_at`, optional `hashed_password`, plus the generated `users_tokens`.
+
+**profiles**: `user_id` (pk, fk users), `display_name`, `payment_methods` (jsonb
+array of `{kind: venmo|zelle|cashapp|paypal|cash|check|other, handle: text}`),
+`reminder_channel` (enum, only `email` in v1). Created with the user.
+
+**groups**: `id`, `name`, `created_by`, `deleted_at`.
+
+**memberships**: `group_id`, `user_id`, `role` (`admin` | `member`), `joined_at`,
+`left_at`. Unique active membership per `(group_id, user_id)`. The group's creator
+gets an `admin` membership in the same transaction that creates the group.
+
+**invites**: `id`, `group_id`, `token_hash`, `created_by`, `expires_at`,
+`used_at`, `used_by`, `revoked_at`. The raw token appears once, in the link.
+
+**counterparties**: `id`, `group_id`, `name`, `contact_email` (optional), `notes`
+(optional), `deleted_at`. A label for an outside party (a landlord, a utility, the
+household next door). Not an account; can't sign in or see anything.
+
+**categories**: `id`, `group_id`, `name`, `deleted_at`. Unique name per group.
+
+**expenses**: `id`, `group_id`, `description`, `amount_cents` (> 0), `date` (the
+day money left the payer's account), `category_id`, `paid_by` (user id, a member),
+`visibility` (`shared` | `private`), `split` (jsonb, the definition below),
+`period_start`/`period_end` (optional, used from phase 3), `created_by`,
+`deleted_at`.
+
+**expense_shares**: `expense_id`, `group_id`, exactly one of `user_id` or
+`counterparty_id`, `amount_cents` (>= 0). Written only by the expense functions,
+never directly by clients.
+
+**payments**: `id`, `group_id`, `from_user_id` or `from_counterparty_id` (exactly
+one), `to_user_id` or `to_counterparty_id` (exactly one), `amount_cents` (> 0),
+`date`, `category_id` (optional), `method` (`venmo` | `zelle` | `cashapp` |
+`paypal` | `cash` | `check` | `other`), `reference` (optional text, like a Venmo
+note or check number), `status` (`pending` | `confirmed` | `self_attested` |
+`declined`), `recorded_by`, `confirmed_at`, `confirmed_by`, `deleted_at`.
+
+**audit_log**: `id`, `group_id`, `table_name`, `row_id`, `action` (`insert` |
+`update` | `soft_delete`), `actor_id` (from `auth.uid()`), `before` and `after`
+(jsonb), `private_owner_id` (set when the row is a private expense), `at`.
+
+### Splits
+
+The `split` jsonb holds one of these. All are computed to cents with the rounding
+rule above and written to `expense_shares`.
+
+| Type | Definition | Example |
+|---|---|---|
+| `equal` | participants | $90 among A, B, C: 30/30/30 |
+| `exact` | participant → cents; must sum to the amount | A $50, B $40 |
+| `percentage` | participant → percent; must sum to 100 | 60/40 |
+| `shares` | participant → positive integer weight | 2:1:1 |
+| `tiered` | a list of fixed allocations (participant → cents) taken off the top, then any of the four above for the remainder | $70 to A first, then 60/40 of the rest |
+
+`tiered` is the only compound type. It does not nest, and there is no general
+formula language.
+
+### Payment status rules (enforced in the database)
+
+- When both sides are different members who have accounts, a new payment is
+  `pending`. Only the **payee** can move it to `confirmed` or `declined`.
+- When either side is a counterparty, a new payment is `self_attested` and counts
+  immediately. The same applies in a group with one member.
+- Nobody can set `confirmed` or `self_attested` directly on insert in a way that
+  breaks the rules above: a `BEFORE INSERT` trigger sets `status` from the parties.
+- `declined` and soft-deleted payments never count toward balances.
+
+### Balances
+
+A security-invoker view, `balances`, returns one row per `(group_id, debtor,
+creditor)` pair, where each side is a member or a counterparty:
+
+```
+owed  = sum(expense_shares where the debtor is the participant and the creditor paid,
+            excluding the payer's own share and soft-deleted expenses)
+paid  = sum(payments from debtor to creditor with status confirmed or self_attested)
+net   = owed - paid   (pairs are netted in both directions; only the positive side is shown)
+```
+
+`category_balances` is the same, grouped by category, netting only payments
+tagged with that category. Because both views use `security_invoker`, a person
+sees exactly the rows their own policies allow. Private expenses never produce
+shares owed to anyone else, so they never enter group balances.
+
+Settle-up suggestions (the fewest transfers that zero out a group) are computed
+in Elixir from `balances`, read-only. They suggest payments; they don't record any.
+
+### Row-level security, table by table
+
+`auth.is_member(group_id)` and `auth.is_admin(group_id)` are `SECURITY DEFINER`,
+`STABLE` SQL functions over active memberships, so policies on `memberships`
+itself don't recurse.
+
+| Table | select | insert | update | delete |
+|---|---|---|---|---|
+| users | own row | none (sign-up runs as owner in `Tab.Accounts`) | own row | none |
+| profiles | own row, or anyone sharing an active group | own row | own row | none |
+| groups | members | any signed-in user (creator becomes admin) | admins | none |
+| memberships | members of that group | none directly (group creation and `accept_invite` only) | admins (role, `left_at`); a member may set their own `left_at` | none |
+| invites | admins of that group | admins | admins (revoke only) | none |
+| counterparties | members | members | members | none |
+| categories | members | members | members | none |
+| expenses | shared: members; private: only `created_by` | members, with `created_by = auth.uid()`; private ones must have the creator as payer and only participant | the creator, or an admin for shared expenses | none |
+| expense_shares | follows its expense | none directly (expense functions only) | none directly | none |
+| payments | members | members, as `recorded_by` | payee (confirm/decline a pending payment); recorder (edit details, soft-delete) | none |
+| audit_log | members, except entries with a `private_owner_id` other than the viewer | none (triggers only) | none | none |
+
+Writes that touch several tables (create an expense and its shares, accept an
+invite) go through `SECURITY INVOKER` SQL functions where possible, so they still
+run under the caller's policies. `accept_invite(token)` is the one
+`SECURITY DEFINER` function: it can't know the group until the token is checked.
+It validates the token hash, expiry, revocation, and use, then marks the invite
+used and inserts the membership, all in one statement block.
+
+### Elixir side
+
+- Contexts: `Tab.Accounts` (sign-in; runs as owner), `Tab.Groups`
+  (groups, memberships, invites, counterparties, categories), `Tab.Ledger`
+  (expenses, splits, payments, balances, settle-up suggestions).
+- Every public function in `Tab.Groups` and `Tab.Ledger` takes the current user
+  (a `%Tab.Accounts.Scope{}`) and runs inside `Repo.as_user/2`.
+- Split math lives in a pure module, `Tab.Ledger.Split`, with no database access.
+
+### Tests that must pass before phase 2
+
+1. **The policy matrix.** For every table and every verb, a test runs the action
+   as each of: a member, an admin, a non-member, the private-expense owner, and
+   another member, and checks it's allowed or refused as the table above says.
+   These run raw SQL through `Repo.as_user/2`, not through the contexts, to prove
+   the database refuses on its own.
+2. **Split math (property tests with StreamData):** shares always sum to the
+   amount; no share is negative; `equal` shares differ by at most one cent;
+   `tiered` gives the fixed amounts first and splits the rest correctly.
+3. **Balances match hand arithmetic** on fixed scenarios: Priya's four-person
+   house, Marcus alone with counterparties only, two partial payments against
+   one balance, a declined payment that doesn't count, and a soft-deleted
+   expense that drops out.
+4. **Private expenses** are invisible to every other member, including the group
+   creator, in `expenses`, `expense_shares`, `balances`, and `audit_log`.
+5. **Invites** work once, fail after expiry, revocation, or use, and can't be
+   accepted for a group by guessing.
+6. **Audit:** every insert, update, and soft delete on ledger tables writes
+   exactly one audit row with the right actor; no role used by the app can
+   delete or change audit rows.
+7. **Payments:** a member-to-member payment starts pending and only the payee can
+   confirm it; a counterparty payment and a solo user's payment are
+   self-attested immediately and show as such.
+8. **No hard deletes:** `tab_user` lacks DELETE on every table (one test walks
+   `information_schema`).
+
+These cover the phase-1 items in the long-form spec's acceptance criteria (§9):
+group create/invite/join, the single-member group, equal and exact splits,
+server-computed balances, two-party confirmation, self-attested payments, audit
+on every change, private-expense invisibility, payments vs. expenses in balances,
+per-category balances, tiered splits, counterparties, partial payments, and the
+direct-bypass checks.
+
+## Phase 2: The web app people use
+
+LiveView pages on the b28 clay kit (`web/assets/vendor/b28-clay.css`). Phoenix's
+default daisyUI is removed in this phase and `core_components.ex` restyled on the
+kit, so the app and the website read as one family. Every page works at 360 px
+wide with no sideways scrolling. Copy follows the brand voice and `stop-slop`.
+
+### Pages
+
+| Page | What you can do |
+|---|---|
+| Sign in | Get a magic link by email; follow it to sign in. First sign-in creates the account and asks for a display name. |
+| Your groups | See your groups with your net balance in each; create a group. |
+| Group | Balances (who owes whom, overall and by category), recent activity, pending payments waiting on you. |
+| Add expense | Description, amount, date (defaults to today), category, who paid, who's in, and the split type. Shows each person's share live before saving. Can be marked private. |
+| Expense | Details, the computed shares, edit, delete (soft), and its history from the audit log. |
+| Settle up | Suggested transfers; record a payment with method and reference. Pending payments show as waiting; the payee sees Confirm and Decline. |
+| Members and invites | Admins create, copy, and revoke invite links; see members; add counterparties. |
+| Join | Opening an invite link signs you in if needed, then joins the group. Used, expired, and revoked links say so plainly. |
+| Profile | Display name and payment methods (shown to people you share a group with). |
+| Export | Download a CSV of everything you can see that you're part of: your expenses, your shares, your payments, and your private expenses. |
+
+### Email notifications
+
+- Sent by Swoosh from an Oban job, so a slow or failing mail service never blocks
+  a page.
+- Two events: a new shared expense you're part of, and a pending payment waiting
+  for you to confirm.
+- One email per event, to the people involved, never to the person who caused it.
+- Self-host: SMTP settings are optional. With none set, notifications are skipped
+  and logged, and everything else works. Cloud: an outbound sender (Amazon SES is
+  the likely pick), configured through Doppler.
+
+### Tests that must pass before phase 3
+
+1. LiveView tests for each page's main path and its refusals (a non-member opening
+   a group URL gets a 404, not an error page that leaks the group's name).
+2. The full journey in one test: sign up, create a group, invite, join, add an
+   expense of each split type, see balances, record a partial payment, confirm
+   it, see the balance drop, export CSV.
+3. A solo user's journey with only counterparties, with no invite ever sent.
+4. Notifications enqueue the right emails, and the app works with no mail
+   settings at all.
+5. No hard-coded colors outside the clay kit tokens; pages pass at 360 px.
+
+These cover the phase-2 items in the long-form spec's acceptance criteria:
+payment methods visible to group-mates, a payment storing its method and
+reference, the reminder email, and unlimited expenses and full export with no
+caps on any plan.
+
+## Deferred, with where it goes
+
+| Item | Phase |
+|---|---|
+| Recurring templates, one-tap logging, `autopay_day`, `fixed`/`variable` stability | 3 |
+| Time-bound split overrides and day-based proration over `period_start`/`period_end` | 3 |
+| Float tracking (days outstanding per share) | 3 |
+| Reminder drafts (Venmo, text, email) and per-recipient statement links | 3 |
+| Bill reading, digest schedule, due-date flags, recurrence detection | 4 |
+| MCP server and OAuth | 5 |
+| Billing accounts, plans, trial, gifts, referrals, Pro owner features | 6 |
+
+## Open questions (with the default used until decided)
+
+1. **Leaving a group with money still owed.** Default: you can leave; your
+   history stays with the group, and others still see what you owed or were owed
+   at the time. You lose access.
+2. **Editing an expense after someone has paid against it.** Default: allowed,
+   balances recompute, and the edit shows in history. Payments aren't tied to
+   specific expenses, so nothing breaks.
+3. **Deleting a whole group.** Default: admins can archive a group (soft delete).
+   Members can still export their own data from an archived group.

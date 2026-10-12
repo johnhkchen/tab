@@ -12,6 +12,25 @@ row-level security. Monorepo:
   are Starlight Markdown in git, prerendered. Plan prices live only in `site/src/data/plans.ts`.
   Read `site/AGENTS.md`. Not shipped with the app: self-hosted copies never show Cloud pricing.
 
+## Project memory: read first, update before stopping
+
+Context gets compacted; these files don't. Treat them as the source of truth.
+
+1. **At the start of a session**, read `docs/JOURNAL.md` (at least the latest entry) and
+   `docs/ROADMAP.md`. Build the current phase from `docs/specification.md`.
+2. **Add a `docs/JOURNAL.md` entry** (newest first, dated, same headings as the others:
+   Done, Decided, State of the world, Gotchas, Next) whenever you:
+   finish a unit of work, make or hear a decision, create or change anything outside
+   the repo (Cloudflare, Doppler, GitHub, servers), hit a gotcha worth not hitting
+   twice, or are about to stop. Same day: extend that day's entry instead of adding one.
+3. **Keep `docs/ROADMAP.md` statuses current** when a phase starts or finishes.
+4. **`docs/specification.md` is the spec for the current phases.** If the code has to
+   differ from it, change the spec in the same commit and note why in the journal.
+   When a new phase comes up, distill its section from `working_specification.md`.
+5. **`working_specification.md` stays untracked.** It's the long-form product spec,
+   including pricing rationale; never commit it.
+6. Never write secret values into the journal or anywhere in git. Names and ids only.
+
 ## Commands
 
 `mise run check` is the CI gate. Run it before calling work done. `mise tasks` lists all.
@@ -30,7 +49,7 @@ row-level security. Monorepo:
 - **Nothing in the ledger may require AI.** `/healthz` stays 200 when extract is down.
 - **Versions live in four places** (`web/mix.exs`, `extract/baml_src/main.baml`,
   `compose.yaml`, `CHANGELOG.md`); `mise run version:check` keeps them in step.
-- **The pricing page must match the spec exactly** (spec §9): Hosted free $0, Plus $10/yr,
+- **The pricing page must match the long-form spec exactly** (§9 there; summary in the journal): Hosted free $0, Plus $10/yr,
   Pro $24/yr, billed yearly; a once-a-year 6-month gift; a 3-month Plus trial for new
   accounts, extendable 6 months at a time on request, with best-effort reading (smaller
   limit, lower priority than paying); referrals earn 1/3/12 months (sign-up/Plus/Pro).

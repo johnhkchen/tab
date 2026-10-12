@@ -48,6 +48,12 @@ mise run check     # everything CI checks; green here means green there
 | `site/`    | The public website. Landing and pricing pages you edit in EmDash, docs in Markdown, prices in `site/src/data/plans.ts`. Astro on Cloudflare Workers. |
 | `scripts/` | Version check and release tagging.                                            |
 
+## Plans and progress
+
+- [docs/ROADMAP.md](docs/ROADMAP.md): the phases, and which one is next.
+- [docs/specification.md](docs/specification.md): what the next phases build, in detail.
+- [docs/JOURNAL.md](docs/JOURNAL.md): what happened, what was decided, and why.
+
 ## Privacy, checked by the database
 
 Every person-facing query runs as a Postgres role that can't bypass row-level
