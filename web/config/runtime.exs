@@ -39,6 +39,9 @@ if config_env() == :dev do
     ]
 end
 
+# One currency per instance; amounts are whole cents of it.
+config :tab, :currency, System.get_env("TAB_CURRENCY", "USD") |> String.upcase()
+
 if extract_url = System.get_env("EXTRACT_URL") do
   config :tab, :extract_url, extract_url
 end

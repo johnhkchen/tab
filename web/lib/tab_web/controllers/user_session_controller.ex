@@ -4,12 +4,19 @@ defmodule TabWeb.UserSessionController do
   alias Tab.Accounts
   alias TabWeb.UserAuth
 
+  # First sign-in: ask for a display name, then carry on to wherever they were headed
+  # (an invite link, usually).
   def create(conn, %{"_action" => "confirmed"} = params) do
-    create(conn, params, "User confirmed successfully.")
+    next = get_session(conn, :user_return_to)
+    welcome = if next, do: ~p"/welcome?#{[next: next]}", else: ~p"/welcome"
+
+    conn
+    |> put_session(:user_return_to, welcome)
+    |> create(params, "You're in.")
   end
 
   def create(conn, params) do
-    create(conn, params, "Welcome back!")
+    create(conn, params, "Welcome back.")
   end
 
   # magic link login
@@ -24,7 +31,10 @@ defmodule TabWeb.UserSessionController do
 
       _ ->
         conn
-        |> put_flash(:error, "The link is invalid or it has expired.")
+        |> put_flash(
+          :error,
+          "That sign-in link has expired or was already used. Ask for a new one below."
+        )
         |> redirect(to: ~p"/users/log-in")
     end
   end
@@ -40,7 +50,7 @@ defmodule TabWeb.UserSessionController do
     else
       # In order to prevent user enumeration attacks, don't disclose whether the email is registered.
       conn
-      |> put_flash(:error, "Invalid email or password")
+      |> put_flash(:error, "That email and password don't match.")
       |> put_flash(:email, String.slice(email, 0, 160))
       |> redirect(to: ~p"/users/log-in")
     end
@@ -56,12 +66,12 @@ defmodule TabWeb.UserSessionController do
 
     conn
     |> put_session(:user_return_to, ~p"/users/settings")
-    |> create(params, "Password updated successfully!")
+    |> create(params, "Password saved.")
   end
 
   def delete(conn, _params) do
     conn
-    |> put_flash(:info, "Logged out successfully.")
+    |> put_flash(:info, "Signed out.")
     |> UserAuth.log_out_user()
   end
 end

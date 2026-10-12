@@ -15,7 +15,7 @@ defmodule Tab.Ledger do
   import Tab.Groups, only: [found: 1, now: 0, set: 3, touched: 1, update: 1]
 
   alias Tab.Accounts.Scope
-  alias Tab.Ledger.{Expense, Payment, Split}
+  alias Tab.Ledger.{AuditEntry, Expense, Payment, Split}
   alias Tab.Repo
 
   @deferred "expenses_shares_add_up, expense_shares_add_up"
@@ -23,12 +23,14 @@ defmodule Tab.Ledger do
   ## Expenses
 
   @doc "The group's expenses this person can see, newest first, with their shares."
-  def list_expenses(%Scope{} = scope, group_id) do
+  def list_expenses(%Scope{} = scope, group_id, opts \\ []) do
     as_user(scope, fn ->
+      query = from e in Expense, where: e.group_id == ^group_id
+      query = if opts[:include_deleted], do: query, else: where(query, [e], is_nil(e.deleted_at))
+
       {:ok,
        Repo.all(
-         from e in Expense,
-           where: e.group_id == ^group_id and is_nil(e.deleted_at),
+         from e in query,
            order_by: [desc: e.date, desc: e.inserted_at],
            preload: :shares
        )}
@@ -151,6 +153,99 @@ defmodule Tab.Ledger do
 
   def delete_payment(%Scope{} = scope, id) do
     as_user(scope, fn -> touched(set(Payment, id, deleted_at: now())) end)
+  end
+
+  @doc "Payments waiting for this person to confirm or decline, in one group or all of them."
+  def pending_for_me(%Scope{user: user} = scope, group_id \\ nil) do
+    as_user(scope, fn ->
+      query =
+        from p in Payment,
+          where: p.to_user_id == ^user.id and p.status == "pending" and is_nil(p.deleted_at),
+          order_by: [asc: p.date]
+
+      query = if group_id, do: where(query, [p], p.group_id == ^group_id), else: query
+      {:ok, Repo.all(query)}
+    end)
+  end
+
+  ## History
+
+  @doc """
+  What changed and who changed it, newest first: one record's history, or the
+  whole group's. Entries about someone else's private expense never show.
+  """
+  def history(%Scope{} = scope, group_id, opts \\ []) do
+    as_user(scope, fn ->
+      query =
+        from a in AuditEntry,
+          where: a.group_id == ^group_id,
+          order_by: [desc: a.at, desc: a.id],
+          limit: ^Keyword.get(opts, :limit, 50)
+
+      query =
+        case Keyword.get(opts, :row_id) do
+          nil -> query
+          row_id -> where(query, [a], a.row_id == ^row_id)
+        end
+
+      {:ok, Repo.all(query)}
+    end)
+  end
+
+  @doc """
+  Recent expenses and payments in a group, newest first, as
+  `{:expense, expense}` and `{:payment, payment}`.
+  """
+  def activity(%Scope{} = scope, group_id, limit \\ 20) do
+    with {:ok, expenses} <- list_expenses(scope, group_id),
+         {:ok, payments} <- list_payments(scope, group_id) do
+      items =
+        Enum.map(expenses, &{:expense, &1}) ++ Enum.map(payments, &{:payment, &1})
+
+      {:ok,
+       items
+       |> Enum.sort_by(fn {_, r} -> {r.date, r.inserted_at} end, fn {d1, t1}, {d2, t2} ->
+         case Date.compare(d1, d2) do
+           :eq -> DateTime.compare(t1, t2) != :lt
+           other -> other == :gt
+         end
+       end)
+       |> Enum.take(limit)}
+    end
+  end
+
+  ## Balances
+
+  @doc """
+  This person's net position in each group they can see:
+  `%{group_id => cents}`, positive when they're owed.
+  """
+  def my_nets(%Scope{user: user} = scope) do
+    as_user(scope, fn ->
+      rows =
+        "balances"
+        |> where(
+          [b],
+          (b.debtor_kind == "user" and b.debtor_id == type(^user.id, :binary_id)) or
+            (b.creditor_kind == "user" and b.creditor_id == type(^user.id, :binary_id))
+        )
+        |> select(
+          [b],
+          {type(b.group_id, :binary_id), b.creditor_id == type(^user.id, :binary_id),
+           b.amount_cents}
+        )
+        |> Repo.all()
+
+      {:ok,
+       Enum.reduce(rows, %{}, fn {group, owed_to_me, n}, acc ->
+         Map.update(
+           acc,
+           group,
+           if(owed_to_me, do: n, else: -n),
+           &(&1 + if(owed_to_me, do: n, else: -n))
+         )
+       end)}
+    end)
   end
 
   ## Balances

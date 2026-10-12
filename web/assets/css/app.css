@@ -1,5 +1,6 @@
-/* See the Tailwind configuration guide for advanced usage
-   https://tailwindcss.com/docs/configuration */
+/* Tab's styles: Tailwind for layout, the b28 clay kit for everything you see.
+   Colors come only from the kit's tokens (plus Tab's one warning color below);
+   Tailwind's default palette is switched off, so `bg-red-500` simply doesn't exist. */
 
 @import "tailwindcss" source(none);
 @import "phoenix-colocated/tab/colocated.css";
@@ -15,82 +16,136 @@
    The heroicons installation itself is managed by your mix.exs */
 @plugin "../vendor/heroicons";
 
-/* daisyUI Tailwind Plugin. */
-@plugin "daisyui/packages/bundle/daisyui" {
-  themes: false;
+/* Fonts are served by Tab itself (OFL, from @fontsource-variable): no outside requests. */
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url("/fonts/lora-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 700;
+  src: url("/fonts/lora-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Karla";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("/fonts/karla-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304,
+    U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Karla";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("/fonts/karla-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308,
+    U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113,
+    U+2C60-2C7F, U+A720-A7FF;
 }
 
-/* daisyUI theme plugin.
-  We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
-  on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
-@plugin "daisyui/packages/bundle/daisyui-theme" {
-  name: "dark";
-  default: false;
-  prefersdark: true;
-  color-scheme: "dark";
-  --color-base-100: oklch(30.33% 0.016 252.42);
-  --color-base-200: oklch(25.26% 0.014 253.1);
-  --color-base-300: oklch(20.15% 0.012 254.09);
-  --color-base-content: oklch(97.807% 0.029 256.847);
-  --color-primary: oklch(58% 0.233 277.117);
-  --color-primary-content: oklch(96% 0.018 272.314);
-  --color-secondary: oklch(58% 0.233 277.117);
-  --color-secondary-content: oklch(96% 0.018 272.314);
-  --color-accent: oklch(60% 0.25 292.717);
-  --color-accent-content: oklch(96% 0.016 293.756);
-  --color-neutral: oklch(37% 0.044 257.287);
-  --color-neutral-content: oklch(98% 0.003 247.858);
-  --color-info: oklch(58% 0.158 241.966);
-  --color-info-content: oklch(97% 0.013 236.62);
-  --color-success: oklch(60% 0.118 184.704);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1.5px;
-  --depth: 1;
-  --noise: 0;
+/* Tab's one color the kit doesn't have: for errors and "this can't be undone". */
+:root {
+  --tab-warn: #9e3d2b;
 }
 
-@plugin "daisyui/packages/bundle/daisyui-theme" {
-  name: "light";
-  default: true;
-  prefersdark: false;
-  color-scheme: "light";
-  --color-base-100: oklch(98% 0 0);
-  --color-base-200: oklch(96% 0.001 286.375);
-  --color-base-300: oklch(92% 0.004 286.32);
-  --color-base-content: oklch(21% 0.006 285.885);
-  --color-primary: oklch(70% 0.213 47.604);
-  --color-primary-content: oklch(98% 0.016 73.684);
-  --color-secondary: oklch(55% 0.027 264.364);
-  --color-secondary-content: oklch(98% 0.002 247.839);
-  --color-accent: oklch(0% 0 0);
-  --color-accent-content: oklch(100% 0 0);
-  --color-neutral: oklch(44% 0.017 285.786);
-  --color-neutral-content: oklch(98% 0 0);
-  --color-info: oklch(62% 0.214 259.815);
-  --color-info-content: oklch(97% 0.014 254.604);
-  --color-success: oklch(70% 0.14 182.503);
-  --color-success-content: oklch(98% 0.014 180.72);
-  --color-warning: oklch(66% 0.179 58.318);
-  --color-warning-content: oklch(98% 0.022 95.277);
-  --color-error: oklch(58% 0.253 17.585);
-  --color-error-content: oklch(96% 0.015 12.422);
-  --radius-selector: 0.25rem;
-  --radius-field: 0.25rem;
-  --radius-box: 0.5rem;
-  --size-selector: 0.21875rem;
-  --size-field: 0.21875rem;
-  --border: 1.5px;
-  --depth: 1;
-  --noise: 0;
+/* Kit tokens as Tailwind names: bg-surface, text-ink-soft, shadow-raised, font-display… */
+@theme {
+  --color-*: initial;
+}
+
+@theme inline {
+  --color-bg: var(--clay-bg);
+  --color-surface: var(--clay-surface);
+  --color-raised: var(--clay-surface-raised);
+  --color-well: var(--clay-well);
+  --color-line: var(--clay-border);
+  --color-ink: var(--clay-ink);
+  --color-ink-soft: var(--clay-ink-soft);
+  --color-primary: var(--clay-primary);
+  --color-primary-strong: var(--clay-primary-strong);
+  --color-on-primary: var(--clay-on-primary);
+  --color-warn: var(--tab-warn);
+  --color-transparent: transparent;
+  --color-current: currentColor;
+
+  --font-display: var(--clay-font-display);
+  --font-body: var(--clay-font-body);
+
+  --radius-clay-sm: var(--clay-radius-sm);
+  --radius-clay: var(--clay-radius);
+  --radius-clay-lg: var(--clay-radius-lg);
+
+  --shadow-raised: var(--clay-shadow-raised);
+  --shadow-pressed: var(--clay-shadow-pressed);
+  --shadow-well: var(--clay-shadow-well);
+}
+
+@layer base {
+  html {
+    background-color: var(--clay-bg);
+    color: var(--clay-ink);
+    font-family: var(--clay-font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3 {
+    font-family: var(--clay-font-display);
+  }
+  /* Amounts line up in columns. */
+  .money {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/* Form controls: wells you type into. */
+@layer components {
+  .tab-field {
+    width: 100%;
+    background: var(--clay-well);
+    border: 1px solid transparent;
+    border-radius: var(--clay-radius-sm);
+    box-shadow: var(--clay-shadow-well);
+    padding: 0.65rem 0.85rem;
+    color: var(--clay-ink);
+    font: inherit;
+  }
+  .tab-field:focus {
+    outline: 3px solid color-mix(in srgb, var(--clay-primary) 40%, transparent);
+    outline-offset: 1px;
+  }
+  .tab-field[aria-invalid="true"] {
+    border-color: var(--tab-warn);
+  }
+  .tab-check {
+    width: 1.15rem;
+    height: 1.15rem;
+    accent-color: var(--clay-primary);
+  }
+  .clay-button--warn {
+    background: var(--tab-warn);
+  }
+  .clay-button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+  a.clay-button,
+  a.clay-chip {
+    display: inline-block;
+    text-decoration: none;
+  }
 }
 
 /* Add variants based on LiveView classes */
@@ -98,10 +153,5 @@
 @custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
 @custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
 
-/* Use the data attribute for dark mode  */
-@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
-
 /* Make LiveView wrapper divs transparent for layout */
 [data-phx-session], [data-phx-teleported-src] { display: contents }
-
-/* This file is for your main application CSS */

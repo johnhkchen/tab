@@ -224,7 +224,7 @@ defmodule TabWeb.UserAuth do
     else
       socket =
         socket
-        |> Phoenix.LiveView.put_flash(:error, "You must log in to access this page.")
+        |> Phoenix.LiveView.put_flash(:error, "Sign in to see that page.")
         |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
 
       {:halt, socket}
@@ -239,7 +239,7 @@ defmodule TabWeb.UserAuth do
     else
       socket =
         socket
-        |> Phoenix.LiveView.put_flash(:error, "You must re-authenticate to access this page.")
+        |> Phoenix.LiveView.put_flash(:error, "Sign in again to change your email or password.")
         |> Phoenix.LiveView.redirect(to: ~p"/users/log-in")
 
       {:halt, socket}
@@ -259,11 +259,7 @@ defmodule TabWeb.UserAuth do
 
   @doc "Returns the path to redirect to after log in."
   # the user was already logged in, redirect to settings
-  def signed_in_path(%Plug.Conn{assigns: %{current_scope: %Scope{user: %Accounts.User{}}}}) do
-    ~p"/users/settings"
-  end
-
-  def signed_in_path(_), do: ~p"/"
+  def signed_in_path(_), do: ~p"/groups"
 
   @doc """
   Plug for routes that require the user to be authenticated.
@@ -273,7 +269,7 @@ defmodule TabWeb.UserAuth do
       conn
     else
       conn
-      |> put_flash(:error, "You must log in to access this page.")
+      |> put_flash(:error, "Sign in to see that page.")
       |> maybe_store_return_to()
       |> redirect(to: ~p"/users/log-in")
       |> halt()

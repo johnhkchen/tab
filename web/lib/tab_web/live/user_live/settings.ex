@@ -9,62 +9,64 @@ defmodule TabWeb.UserLive.Settings do
   def render(assigns) do
     ~H"""
     <Layouts.app flash={@flash} current_scope={@current_scope}>
-      <div class="text-center">
-        <.header>
-          Account Settings
-          <:subtitle>Manage your account email address and password settings</:subtitle>
-        </.header>
-      </div>
+      <.back navigate={~p"/profile"}>You</.back>
+      <.header>
+        Email and password
+        <:subtitle>Only you see these. Group-mates see your name and payment handles.</:subtitle>
+      </.header>
 
-      <.form for={@email_form} id="email_form" phx-submit="update_email" phx-change="validate_email">
-        <.input
-          field={@email_form[:email]}
-          type="email"
-          label="Email"
-          autocomplete="username"
-          spellcheck="false"
-          required
-        />
-        <.button variant="primary" phx-disable-with="Changing...">Change Email</.button>
-      </.form>
+      <.card title="Email">
+        <.form for={@email_form} id="email_form" phx-submit="update_email" phx-change="validate_email">
+          <.input
+            field={@email_form[:email]}
+            type="email"
+            label="Email"
+            autocomplete="username"
+            spellcheck="false"
+            required
+          />
+          <.button phx-disable-with="Sending…">Change email</.button>
+        </.form>
+      </.card>
 
-      <div class="divider" />
-
-      <.form
-        for={@password_form}
-        id="password_form"
-        action={~p"/users/update-password"}
-        method="post"
-        phx-change="validate_password"
-        phx-submit="update_password"
-        phx-trigger-action={@trigger_submit}
-      >
-        <input
-          name={@password_form[:email].name}
-          type="hidden"
-          id="hidden_user_email"
-          spellcheck="false"
-          value={@current_email}
-        />
-        <.input
-          field={@password_form[:password]}
-          type="password"
-          label="New password"
-          autocomplete="new-password"
-          spellcheck="false"
-          required
-        />
-        <.input
-          field={@password_form[:password_confirmation]}
-          type="password"
-          label="Confirm new password"
-          autocomplete="new-password"
-          spellcheck="false"
-        />
-        <.button variant="primary" phx-disable-with="Saving...">
-          Save Password
-        </.button>
-      </.form>
+      <.card title="Password">
+        <p class="mb-4 text-ink-soft">
+          Optional. Emailed links always work; a password is for when email is slow.
+        </p>
+        <.form
+          for={@password_form}
+          id="password_form"
+          action={~p"/users/update-password"}
+          method="post"
+          phx-change="validate_password"
+          phx-submit="update_password"
+          phx-trigger-action={@trigger_submit}
+        >
+          <input
+            name={@password_form[:email].name}
+            type="hidden"
+            id="hidden_user_email"
+            spellcheck="false"
+            value={@current_email}
+          />
+          <.input
+            field={@password_form[:password]}
+            type="password"
+            label="New password"
+            autocomplete="new-password"
+            spellcheck="false"
+            required
+          />
+          <.input
+            field={@password_form[:password_confirmation]}
+            type="password"
+            label="Confirm new password"
+            autocomplete="new-password"
+            spellcheck="false"
+          />
+          <.button phx-disable-with="Saving…">Save password</.button>
+        </.form>
+      </.card>
     </Layouts.app>
     """
   end
@@ -74,10 +76,14 @@ defmodule TabWeb.UserLive.Settings do
     socket =
       case Accounts.update_user_email(socket.assigns.current_scope.user, token) do
         {:ok, _user} ->
-          put_flash(socket, :info, "Email changed successfully.")
+          put_flash(socket, :info, "Email changed.")
 
         {:error, _} ->
-          put_flash(socket, :error, "Email change link is invalid or it has expired.")
+          put_flash(
+            socket,
+            :error,
+            "That link to change your email has expired or was already used."
+          )
       end
 
     {:ok, push_navigate(socket, to: ~p"/users/settings")}
@@ -124,7 +130,7 @@ defmodule TabWeb.UserLive.Settings do
           &url(~p"/users/settings/confirm-email/#{&1}")
         )
 
-        info = "A link to confirm your email change has been sent to the new address."
+        info = "Check the new address for a link to confirm the change."
         {:noreply, socket |> put_flash(:info, info)}
 
       changeset ->

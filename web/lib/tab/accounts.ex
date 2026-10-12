@@ -6,7 +6,7 @@ defmodule Tab.Accounts do
   import Ecto.Query, warn: false
   alias Tab.Repo
 
-  alias Tab.Accounts.{User, UserToken, UserNotifier}
+  alias Tab.Accounts.{Profile, Scope, User, UserToken, UserNotifier}
 
   ## Database getters
 
@@ -79,6 +79,24 @@ defmodule Tab.Accounts do
     |> User.email_changeset(attrs)
     |> Repo.insert()
   end
+
+  ## Profile (what group-mates see)
+
+  @doc "Your own profile. Runs as you, like everything person-facing."
+  def get_profile(%Scope{user: user} = scope) do
+    {:ok, profile} = Tab.DBError.as_user(scope, fn -> {:ok, Repo.get!(Profile, user.id)} end)
+    profile
+  end
+
+  def change_profile(%Profile{} = profile, attrs \\ %{}), do: Profile.changeset(profile, attrs)
+
+  def update_profile(%Scope{} = scope, attrs) do
+    Tab.DBError.as_user(scope, fn ->
+      scope |> get_profile_in_transaction() |> Profile.changeset(attrs) |> Repo.update()
+    end)
+  end
+
+  defp get_profile_in_transaction(%Scope{user: user}), do: Repo.get!(Profile, user.id)
 
   ## Settings
 

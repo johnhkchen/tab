@@ -8,9 +8,9 @@ defmodule TabWeb.UserLive.LoginTest do
     test "renders login page", %{conn: conn} do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
-      assert html =~ "Log in"
-      assert html =~ "Sign up"
-      assert html =~ "Log in with email"
+      assert html =~ "Sign in"
+      assert html =~ "New here?"
+      assert html =~ "Email me a link"
     end
   end
 
@@ -25,13 +25,13 @@ defmodule TabWeb.UserLive.LoginTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert html =~ "If your email is in our system"
+      assert html =~ "Check your email for a link"
 
       assert Tab.Repo.get_by!(Tab.Accounts.UserToken, user_id: user.id).context ==
                "login"
     end
 
-    test "does not disclose if user is registered", %{conn: conn} do
+    test "makes an account for a new email, with the same reply as a known one", %{conn: conn} do
       {:ok, lv, _html} = live(conn, ~p"/users/log-in")
 
       {:ok, _lv, html} =
@@ -39,7 +39,9 @@ defmodule TabWeb.UserLive.LoginTest do
         |> render_submit()
         |> follow_redirect(conn, ~p"/users/log-in")
 
-      assert html =~ "If your email is in our system"
+      assert html =~ "Check your email for a link"
+      assert user = Tab.Accounts.get_user_by_email("idonotexist@example.com")
+      assert Tab.Repo.get_by!(Tab.Accounts.UserToken, user_id: user.id).context == "login"
     end
   end
 
@@ -56,7 +58,7 @@ defmodule TabWeb.UserLive.LoginTest do
 
       conn = submit_form(form, conn)
 
-      assert redirected_to(conn) == ~p"/"
+      assert redirected_to(conn) == ~p"/groups"
     end
 
     test "redirects to login page with a flash error if credentials are invalid", %{
@@ -70,22 +72,11 @@ defmodule TabWeb.UserLive.LoginTest do
       render_submit(form, %{user: %{remember_me: true}})
 
       conn = follow_trigger_action(form, conn)
-      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Invalid email or password"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) ==
+               "That email and password don't match."
+
       assert redirected_to(conn) == ~p"/users/log-in"
-    end
-  end
-
-  describe "login navigation" do
-    test "redirects to registration page when the Register button is clicked", %{conn: conn} do
-      {:ok, lv, _html} = live(conn, ~p"/users/log-in")
-
-      {:ok, _login_live, login_html} =
-        lv
-        |> element("main a", "Sign up")
-        |> render_click()
-        |> follow_redirect(conn, ~p"/users/register")
-
-      assert login_html =~ "Register"
     end
   end
 
@@ -98,9 +89,9 @@ defmodule TabWeb.UserLive.LoginTest do
     test "shows login page with email filled in", %{conn: conn, user: user} do
       {:ok, _lv, html} = live(conn, ~p"/users/log-in")
 
-      assert html =~ "You need to reauthenticate"
-      refute html =~ "Register"
-      assert html =~ "Log in with email"
+      assert html =~ "needs a fresh sign-in"
+      refute html =~ "New here?"
+      assert html =~ "Email me a link"
 
       assert html =~
                ~s(<input type="email" name="user[email]" id="login_form_magic_email" value="#{user.email}")

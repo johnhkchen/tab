@@ -55,9 +55,22 @@ defmodule TabWeb.Router do
       on_mount: [{TabWeb.UserAuth, :require_authenticated}] do
       live "/users/settings", UserLive.Settings, :edit
       live "/users/settings/confirm-email/:token", UserLive.Settings, :confirm_email
+
+      live "/welcome", WelcomeLive, :show
+      live "/profile", ProfileLive, :edit
+      live "/join/:token", JoinLive, :show
+
+      live "/groups", GroupLive.Index, :index
+      live "/groups/:group_id", GroupLive.Show, :show
+      live "/groups/:group_id/members", GroupLive.Members, :show
+      live "/groups/:group_id/settle", GroupLive.Settle, :show
+      live "/groups/:group_id/expenses/new", ExpenseLive.Form, :new
+      live "/groups/:group_id/expenses/:id", ExpenseLive.Show, :show
+      live "/groups/:group_id/expenses/:id/edit", ExpenseLive.Form, :edit
     end
 
     post "/users/update-password", UserSessionController, :update_password
+    get "/export.csv", ExportController, :show
   end
 
   scope "/", TabWeb do
@@ -65,7 +78,6 @@ defmodule TabWeb.Router do
 
     live_session :current_user,
       on_mount: [{TabWeb.UserAuth, :mount_current_scope}] do
-      live "/users/register", UserLive.Registration, :new
       live "/users/log-in", UserLive.Login, :new
       live "/users/log-in/:token", UserLive.Confirmation, :new
     end

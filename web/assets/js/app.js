@@ -33,7 +33,15 @@ const liveSocket = new LiveSocket("/live", Socket, {
 })
 
 // Show progress bar on live navigation and form submits
-topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})
+// The kit's steel blue (--clay-primary); topbar can't read CSS variables.
+topbar.config({barColors: {0: "#44679b"}, shadowColor: "rgba(28, 25, 23, .2)"})
+
+// Invite links: select on tap, copy on the button.
+window.addEventListener("tab:select", e => e.target.select())
+window.addEventListener("tab:copy", e => {
+  e.target.select()
+  navigator.clipboard?.writeText(e.target.value)
+})
 window.addEventListener("phx:page-loading-start", _info => topbar.show(300))
 window.addEventListener("phx:page-loading-stop", _info => topbar.hide())
 
