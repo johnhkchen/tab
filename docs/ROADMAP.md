@@ -19,7 +19,7 @@ Everything the ledger stands on, with nothing to log expenses with yet.
 - `mise` toolchain and tasks, CI, tag-driven releases to GHCR.
 - Public website at tab.b28.dev, admin behind Cloudflare Access.
 
-## Phase 1: The ledger, enforced by the database (in progress)
+## Phase 1: The ledger, enforced by the database (done, unreleased, 2026-10-12)
 
 Groups, members, invites, expenses with every split type, payments, external
 counterparties, private expenses, and the audit log, each with row-level security

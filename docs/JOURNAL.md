@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-12: v0.1.0 released, website live, phases 1–2 specified
+## 2026-10-12: v0.1.0 released, website live, phase 1 built
 
 ### Done
 - Scaffolded the monorepo and released **v0.1.0**
@@ -25,6 +25,12 @@ this repo), **Gotchas**, **Next**.
   <https://tab.b28.dev>. Prices live in `site/src/data/plans.ts`, guarded by a test.
 - Vendored the `stop-slop` skill. Wrote `docs/ROADMAP.md` and
   `docs/specification.md` (phases 1–2).
+- **Phase 1 built** (unreleased): `mix phx.gen.auth --binary-id --live` for
+  sign-in; migrations `*_create_ledger.exs` (tables, triggers, audit, views,
+  `accept_invite`, `set_expense_shares`) and `*_ledger_policies.exs` (grants and
+  one policy per verb per table); `Tab.Ledger.Split`; contexts `Tab.Groups` and
+  `Tab.Ledger` (all through `Tab.DBError.as_user/2`). Tests: policy matrix,
+  ledger rules, split properties (StreamData), contexts. 217 web tests.
 
 ### Decided
 - **Stack:** Elixir/Phoenix + Postgres RLS; BAML Language as its own service;
@@ -48,6 +54,12 @@ this repo), **Gotchas**, **Next**.
   only after it's committed to Postgres. Mailgun dropped. *Revised the same
   day:* self-host won't run its own mail server either; it'll poll an existing
   mailbox (IMAP) or use Resend's inbound webhooks. Decided in phase 4.
+- **Phase 1 details that differ from the first draft of the spec** (the spec
+  is updated): a payment the payee records is confirmed as written; editing a
+  payment's amount, date, or parties resets its status; `set_expense_shares` is
+  a second `SECURITY DEFINER` function; users get no UPDATE and profiles no
+  INSERT as `tab_user`; settle-up is greedy (at most n−1 payments), not
+  provably fewest; invites cap at 30 days.
 - **Outbound mail:** Resend (Swoosh's Resend adapter), "for now, at least until
   there's a problem." Generic SMTP for self-hosters who want it; with neither,
   sign-in links go to the server log. Wired up in phase 2. Until then, prod
@@ -94,8 +106,22 @@ this repo), **Gotchas**, **Next**.
   re-run the failed job.
 - EmDash's catch-all `[slug].astro` route breaks Starlight's `/docs/`. Each EmDash
   page needs its own small route file in `site/src/pages/`.
+- `INSERT ... RETURNING` on `groups` fails RLS: the select policy is checked
+  before the AFTER trigger adds the creator's membership. Ids come from Ecto, so
+  don't add `read_after_writes` there.
+- The test sandbox never commits, so deferred constraint triggers never fire on
+  their own in tests. Force them with `SET CONSTRAINTS ... IMMEDIATE` (then back
+  to `DEFERRED`); `Tab.Ledger` does this anyway.
+- In the sandbox `now()` is the same for a whole test, and `timestamp(0)` rounds
+  to the nearest second (up, too). Leave a second of slack in time comparisons.
+- `RETURNING`-free BEFORE triggers fire before RLS `WITH CHECK`, so a trigger's
+  error (like "payer must be a member") can show up instead of the RLS refusal.
+- SQL function bodies are checked at creation; the ledger migration sets
+  `check_function_bodies = off` because helpers refer to tables made later.
 
 ### Next
-- Start **phase 1** from `docs/specification.md`: `mix phx.gen.auth` with binary
-  ids, then the schema migrations with their RLS policies, then the policy-matrix
-  tests, then `Tab.Ledger.Split` with property tests.
+- Start **phase 2** from `docs/specification.md`: wire Resend (and SMTP, and
+  log-only) into `config/runtime.exs` first, since sign-in needs mail; then the
+  pages, restyled on the clay kit with daisyUI removed.
+- Decide the open questions in the spec before their pages: leaving with a
+  balance, editing after payments, archiving a group.

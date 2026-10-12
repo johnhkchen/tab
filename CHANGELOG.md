@@ -2,6 +2,22 @@
 
 What changed in each version of Tab, newest first.
 
+## [Unreleased]
+
+### Added
+- Sign in with an emailed link (a password is optional). Sending mail in
+  production comes in the next phase; until then links only reach the dev mailbox.
+- The ledger, kept honest by the database itself: groups, invites, members,
+  counterparties (a landlord, a utility, the household next door), categories,
+  expenses split equally, exactly, by percentage, by shares, or with fixed
+  amounts off the top, and payments. Balances are worked out on the fly, never
+  stored.
+- A payment between two members counts once the person paid confirms it. A
+  payment with a counterparty counts right away.
+- Private expenses only their creator can see, not even the group's admin.
+- A history of every change, written by the database, that nobody can edit.
+- No screens yet: this is the layer the web app will stand on.
+
 ## [0.1.0] - 2026-10-12
 
 The foundation. Nothing to log expenses with yet; everything the ledger will stand on.
