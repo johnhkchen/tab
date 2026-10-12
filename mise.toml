@@ -35,7 +35,7 @@ run = "mix setup"
 [tasks.db]
 description = "Start the local Postgres (Docker) and wait until it accepts connections"
 run = """
-docker compose up -d db
+docker compose -f compose.yaml -f compose.dev.yaml up -d db
 until docker compose exec -T db pg_isready -U postgres >/dev/null 2>&1; do sleep 1; done
 """
 

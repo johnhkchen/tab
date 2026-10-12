@@ -3,10 +3,28 @@
 #   extract  reads bills and receipts; optional, nothing in the ledger needs it
 #   db       Postgres; your data lives in the `tab-db` volume
 #
-# For local development, `mise run db` starts only the database.
+# Locked down by default, so it's safe on a machine that also runs other things:
+#   - Postgres has no published port and sits on its own network with no
+#     internet access. Only `web` joins it; `extract` can't even reach it.
+#   - Every container runs as a non-root user, with a read-only filesystem,
+#     no extra Linux capabilities, and memory/process limits.
+#   - TAB_LISTEN picks which host address the app listens on. Behind a reverse
+#     proxy on a shared server, set it to 127.0.0.1.
+#
+# For local development, `mise run db` adds compose.dev.yaml, which publishes
+# Postgres on 127.0.0.1:5432.
+
+x-locked-down: &locked-down
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
+  tmpfs: ["/tmp"]
+  pids_limit: 256
+  restart: unless-stopped
 
 services:
   web:
+    <<: *locked-down
     image: ghcr.io/johnhkchen/tab-web:${TAB_VERSION:-0.1.0}
     build: ./web
     depends_on:
@@ -18,33 +36,53 @@ services:
       SECRET_KEY_BASE: ${SECRET_KEY_BASE:-}
       PHX_HOST: ${PHX_HOST:-localhost}
       EXTRACT_URL: http://extract:4100
+      # The release writes its runtime files here instead of its read-only install dir.
+      RELEASE_TMP: /tmp
     ports:
-      - "${PORT:-4000}:4000"
+      - "${TAB_LISTEN:-0.0.0.0}:${PORT:-4000}:4000"
     volumes:
       - tab-data:/app/data
-    restart: unless-stopped
+    networks: [data, outside]
+    mem_limit: 768m
 
   extract:
+    <<: *locked-down
     image: ghcr.io/johnhkchen/tab-extract:${TAB_VERSION:-0.1.0}
     build: ./extract
-    # No database credentials, on purpose: extraction can only propose, never write.
-    restart: unless-stopped
+    # No database credentials and no route to the database, on purpose:
+    # extraction can only propose, never write. It needs the internet only to
+    # reach the AI provider.
+    environment:
+      HOME: /tmp
+    networks: [outside]
+    mem_limit: 512m
 
   db:
+    <<: *locked-down
     image: postgres:18-alpine
+    # The image's startup script needs these to set up its data directory and
+    # drop from root to the postgres user. Everything else stays dropped.
+    cap_add: [CHOWN, DAC_OVERRIDE, FOWNER, SETGID, SETUID]
+    tmpfs: ["/tmp", "/var/run/postgresql"]
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
       POSTGRES_DB: tab
-    ports:
-      - "127.0.0.1:5432:5432"
     volumes:
       - tab-db:/var/lib/postgresql
+    networks: [data]
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 2s
       timeout: 3s
       retries: 30
-    restart: unless-stopped
+
+networks:
+  # web <-> db only: no internet, nothing published to the host.
+  data:
+    internal: true
+  # web <-> extract, and their way out (the AI provider, email, payments).
+  outside:
 
 volumes:
   tab-db:

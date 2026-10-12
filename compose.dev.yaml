@@ -1,0 +1,10 @@
+# Local development only: publishes Postgres on the loopback address so
+# `mix test` and `mix phx.server` on your machine can reach it.
+# Used by `mise run db`; never use this on a shared or public server.
+
+services:
+  db:
+    # Docker won't publish ports from a container that's only on an internal network.
+    networks: [data, outside]
+    ports:
+      - "127.0.0.1:5432:5432"
