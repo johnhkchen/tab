@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-13: phase 3 built and released as v0.3.0; phase 4 specified
+## 2026-10-13: phase 3 released as v0.3.0; phase 4 specified and built
 
 ### Done
 - Distilled phase 3 into `docs/specification.md` (commit `eb9fdec`) and built it.
@@ -35,8 +35,29 @@ this repo), **Gotchas**, **Next**.
 - **v0.3.0 released** (commit `e5b5944`, tag `v0.3.0`). Website docs: new
   page `/docs/bills/`, "What works today" updated (it still said 0.1.0), and a
   statement-link line on the privacy page. Site redeployed.
-- Distilled phase 4 (reading bills) into `docs/specification.md`; roadmap set
-  to in progress.
+- Distilled phase 4 (reading bills) into `docs/specification.md` and built it.
+- Database (`20261013090000_create_inbox.exs`): `forwarding_addresses`,
+  `inbound_messages` (written only by the webhook, as the owner),
+  `documents` (`bytea`, purge sets `content` to null for good; a kept one is
+  as visible as its expense), `pending_items` (every reference checked under
+  the owner's own policies by `ledger.pending_refs_ok`);
+  `recurring_templates.sender`, `profiles.digest_days`.
+- `extract/`: `POST /read`, one Claude Haiku 5.5 call per document (photo as
+  image, PDF as document, email as fenced text), amounts converted to cents in
+  BAML, 503 `off` without a key. 10 BAML tests, all offline.
+- Elixir: `Tab.Inbox` (addresses, uploads with magic-byte checks, review,
+  `confirm/5` in one transaction), `Tab.Inbox.Receiving` (webhook record and
+  fetch-and-match, the only owner-side queries), `Tab.Inbox.Resend` (Svix
+  signature, fetch, capped raw download), `Tab.Inbox.Email` (`:mimemail`),
+  `Tab.Inbox.Proposal`, `Tab.Reader`; Oban queues `inbox` and `read`, workers
+  `FetchWorker`, `ReadWorker`, `Mail`, and a 9:00 cron `DigestWorker`.
+- Pages: Bills to check (`/inbox`, photos shrunk to 1600 px JPEG in the
+  browser by a colocated hook), one bill (`/inbox/:id`), Forward bills
+  (`/inbox/forwarding`), the add-expense form with `?item=`, digest days on
+  You, kept originals on the expense page, `/documents/:id` (sandboxed except
+  PDFs), a "Bills to check" nav chip, and a card on the groups page.
+- 382 web tests (was 319), 10 extract tests; `check` and `check:narrow` (22
+  pages) pass.
 
 ### Decided
 - The maintainer picked all four recommended options for phase 3: a bill's
@@ -52,6 +73,12 @@ this repo), **Gotchas**, **Next**.
   matching, digest), submission links deferred to phase 6; originals deleted on
   confirm or dismiss unless "Keep the original" is ticked. Open question 1 is
   closed.
+- Built differently from the first draft of the spec (spec updated): one
+  reader call instead of classify-then-extract; the personal inbox tables
+  stay out of the per-group audit log; duplicates are turned away rather than
+  stored as dismissed; "Treat bills from X as a bill" is a box on the form;
+  line items are listed and assigned with the existing `tiered` split; "as
+  each bill arrives" means no digest days and one email per bill.
 - Mine, written into the spec: PDFs go to the model as PDFs (BAML has a `pdf`
   type); photos are resized to 1600 px JPEG in the browser; originals live in
   Postgres `bytea`; pending items belong to a person and pick a group on review.
@@ -65,6 +92,15 @@ this repo), **Gotchas**, **Next**.
   `tab-extract:0.3.0`. Cloudflare: `tab-site` Worker redeployed.
 
 ### Gotchas
+- The `~w()`-with-parentheses migration mistake happened again
+  (`~w(guard_document() ...)`), and again `ecto.rollback` rolled back the
+  previous migration on dev. Use a list of strings for function signatures.
+- Claude takes PDFs only in a user message: BAML prompts need
+  `${role("system")}` and `${role("user")}` markers, or the request fails.
+- `:mimemail.decode/1` calls `:iconv`, which isn't installed; pass
+  `encoding: :none` and clean bad UTF-8 ourselves.
+- The `stamp_actor` trigger overwrites `user_id` with the caller, so
+  inserting a row "for" someone else isn't refused: it lands as your own.
 - `Phoenix.LiveViewTest` doesn't send `_target` from `form |> render_change`,
   so the form tells a split edit from other edits by comparing the split fields
   before and after, not by `_target`.
@@ -77,10 +113,13 @@ this repo), **Gotchas**, **Next**.
   means B owes A back. An overpayment covers A's next share ahead of time.
 
 ### Next
-- Build phase 4: migration and `Tab.Inbox`, the BAML reader, the Resend
-  webhook and jobs, the inbox and review pages, the digest.
-- Outside the repo, later: a Resend receiving domain and webhook for Cloud,
-  `RESEND_WEBHOOK_SECRET` and `ANTHROPIC_API_KEY` in Doppler `tab/prd`.
+- Try a live read: no `ANTHROPIC_API_KEY` exists yet (not in Doppler, not
+  local). Put one in Doppler `tab/prd` and read a real bill before release.
+- Release v0.4.0: bump the four version places, website docs (bills to check,
+  forwarding, and the self-host settings), tag, `site:deploy`.
+- Outside the repo, for Cloud: a Resend receiving domain, the `email.received`
+  webhook pointing at `/inbound/resend`, `RESEND_WEBHOOK_SECRET` in Doppler.
+- Then phase 5 (MCP server).
 
 ---
 

@@ -27,6 +27,8 @@ defmodule TabWeb.Router do
     pipe_through :api
 
     get "/healthz", HealthController, :show
+    # Resend's email.received webhook; the signature decides (Tab.Inbox.Resend).
+    post "/inbound/resend", InboundController, :resend
   end
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
@@ -72,7 +74,13 @@ defmodule TabWeb.Router do
       live "/groups/:group_id/expenses/new", ExpenseLive.Form, :new
       live "/groups/:group_id/expenses/:id", ExpenseLive.Show, :show
       live "/groups/:group_id/expenses/:id/edit", ExpenseLive.Form, :edit
+
+      live "/inbox", InboxLive.Index, :index
+      live "/inbox/forwarding", InboxLive.Forwarding, :show
+      live "/inbox/:id", InboxLive.Show, :show
     end
+
+    get "/documents/:id", DocumentController, :show
 
     post "/users/update-password", UserSessionController, :update_password
     get "/export.csv", ExportController, :show

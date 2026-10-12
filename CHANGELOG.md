@@ -2,6 +2,30 @@
 
 What changed in each version of Tab, newest first.
 
+## [Unreleased]
+
+Send Tab a bill and it fills in the expense for you to check.
+
+### Added
+- Bills to check: add a photo of a receipt or a PDF, and Tab reads the
+  amount, the date, the dates it covers, and when it's due. You check it
+  beside the original and save it as an expense, or drop it. Nothing counts
+  until you save it.
+- Forward bills by email: each person gets a private address. Set up a
+  filter in Gmail, Outlook.com, iCloud Mail, or Fastmail once, and new bills
+  land in Bills to check. Tab never asks for access to your mailbox. Gmail's
+  forwarding code shows up on the page.
+- A bill from a company you've logged before fills in that bill's split,
+  payer, and autopay date. A first bill from a company can become a bill.
+- A digest email on the 10th and 25th (or days you pick) lists bills waiting
+  to be checked. A bill due sooner gets its own email.
+- Keep the original with the expense if you like; otherwise Tab deletes it
+  once you save or drop the bill.
+- Self-hosting: set `ANTHROPIC_API_KEY` on `extract` to turn reading on
+  (Claude Haiku), and `RESEND_WEBHOOK_SECRET` with `TAB_INBOUND_DOMAIN` to
+  receive forwarded mail through Resend. Without them, bills are typed in by
+  hand beside the original. `TAB_READS_PER_DAY` caps reading per person.
+
 ## [0.3.0] - 2026-10-13
 
 Bills that come back, people who go away, and asking for money without the awkward text.

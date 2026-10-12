@@ -24,6 +24,13 @@ defmodule TabWeb.GroupLive.Index do
         </ul>
       </.card>
 
+      <.card :if={@to_check > 0} title="Bills to check" id="to-check">
+        <p class="text-ink-soft">
+          {if @to_check == 1, do: "A bill you sent is", else: "#{@to_check} bills you sent are"} waiting for you to check.
+          <.link navigate={~p"/inbox"} class="underline">Check and save</.link>
+        </p>
+      </.card>
+
       <ul id="groups" class="space-y-3">
         <li :for={group <- @groups}>
           <.link
@@ -79,11 +86,13 @@ defmodule TabWeb.GroupLive.Index do
     {:ok, nets} = Ledger.my_nets(scope)
     {:ok, waiting} = Ledger.pending_for_me(scope)
     waiting_ids = MapSet.new(waiting, & &1.group_id)
+    {:ok, to_check} = Tab.Inbox.ready_count(scope)
 
     assign(socket,
       groups: groups,
       nets: nets,
       waiting: waiting,
+      to_check: to_check,
       groups_waiting: Enum.filter(groups, &MapSet.member?(waiting_ids, &1.id)),
       form: to_form(%{"name" => ""}, as: "group")
     )

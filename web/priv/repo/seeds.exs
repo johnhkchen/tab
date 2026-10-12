@@ -163,3 +163,44 @@ if bills == [] do
 
   IO.puts("Demo bills added.")
 end
+
+# Phase 4 demo: two bills to check, one read and one to type in by hand. The
+# reader isn't called: the reading is filled in here.
+{:ok, waiting} = Tab.Inbox.list_items(ps)
+
+if waiting == [] do
+  {:ok, read} =
+    Tab.Inbox.upload(ps, %{
+      content_type: "application/pdf",
+      filename: "pge-october.pdf",
+      data: "%PDF-1.4 demo PG&E bill"
+    })
+
+  {:ok, smudged} =
+    Tab.Inbox.upload(ps, %{
+      content_type: "application/pdf",
+      filename: "receipt.pdf",
+      data: "%PDF-1.4 demo receipt"
+    })
+
+  today = Date.utc_today()
+
+  {:ok, _} =
+    Tab.Inbox.save_reading(
+      ps,
+      read,
+      Tab.Inbox.Proposal.validate(%{
+        "doc_type" => "utility",
+        "merchant" => "PG&E",
+        "total_cents" => 8_420,
+        "date" => Date.to_iso8601(Date.add(today, -2)),
+        "due_on" => Date.to_iso8601(Date.add(today, 3)),
+        "period_start" => Date.to_iso8601(Date.add(today, -33)),
+        "period_end" => Date.to_iso8601(Date.add(today, -3))
+      }),
+      "billing@pge.com"
+    )
+
+  {:ok, _} = Tab.Inbox.mark(ps, smudged, "unreadable", "couldn't read this one")
+  IO.puts("Demo bills to check added.")
+end

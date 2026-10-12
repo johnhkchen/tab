@@ -10,6 +10,7 @@ defmodule Tab.Accounts.Profile do
     field :display_name, :string
     field :payment_methods, {:array, :map}, default: []
     field :reminder_channel, :string, default: "email"
+    field :digest_days, {:array, :integer}, default: [10, 25]
 
     timestamps()
   end

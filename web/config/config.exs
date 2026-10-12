@@ -28,10 +28,16 @@ config :tab,
 config :tab, Oban,
   engine: Oban.Engines.Basic,
   repo: Tab.Repo,
-  queues: [default: 10, mail: 5]
+  queues: [default: 10, mail: 5, inbox: 5, read: 3],
+  plugins: [
+    {Oban.Plugins.Cron, crontab: [{"0 9 * * *", Tab.Inbox.DigestWorker}]}
+  ]
 
 # Where the BAML extraction service listens (extract/).
 config :tab, :extract_url, "http://localhost:4100"
+
+# Reading bills (phase 4). Each is set from the environment in runtime.exs.
+config :tab, :reads_per_day, 30
 
 # Configure the endpoint
 config :tab, TabWeb.Endpoint,

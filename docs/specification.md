@@ -570,8 +570,10 @@ template.
 
 **profiles** gains `digest_days` (int array, default `{10,25}`, each 1 to 28).
 
-All new tables are audited (`documents` without `content`, `pending_items`
-without `proposal` contents beyond the amount).
+These tables belong to one person, not a group, so they stay out of the
+group audit log (which is per group). Each keeps its own trail in its
+columns (`read_at`, `status`, `purged_at`), and the expense an item becomes
+is audited like any other.
 
 ### Row-level security for the new tables
 
@@ -592,9 +594,11 @@ expense the owner can't see or a private one that isn't theirs.
   base64 content and type, and for email the subject, sender, and text body. It
   returns the type and the fields below, or an error. No database, no tools, no
   memory between calls.
-- Two BAML functions on Claude Haiku 5.5: classify, then extract with the
-  type's schema. Types: `utility`, `receipt`, `subscription`, `rent`, `travel`,
-  `phone`, `other`.
+- One BAML call per document on Claude Haiku 5.5 returns the type and the
+  fields together (one call costs half of classify-then-extract, and the type
+  rides along fine). Types: `utility`, `receipt`, `subscription`, `rent`,
+  `travel`, `phone`, `other`. Amounts come back as printed and BAML code turns
+  them into cents.
 - Fields: `merchant`, `total_cents`, `date`, `due_on`, `period_start`,
   `period_end`, `account_hint` (last 4 only), `line_items` (description, cents),
   `tax_cents`, `tip_cents`, and `confidence` per field. A field the reader isn't
@@ -628,7 +632,8 @@ expense the owner can't see or a private one that isn't theirs.
   `forwarding-noreply@google.com`), skips reading, and shows the code on the
   forwarding page.
 - **Duplicates:** a document with the same `sha256` as one the person sent in
-  the last 90 days is dismissed with a note. After reading, an expense in their
+  the last 90 days is turned away: an upload says so, and an email shows as
+  "already here" on the forwarding page. After reading, an expense in their
   groups with the same amount within 5 days of the same date sets
   `duplicate_of`, and review warns before saving.
 - **The daily limit:** past `TAB_READS_PER_DAY`, items wait in `waiting` and a
@@ -649,10 +654,11 @@ expense the owner can't see or a private one that isn't theirs.
   against template names. A match prefills like **Log it** (phase 3: split,
   payer, autopay date, fixed-amount check) and says so: "Looks like your
   Electric bill, split like last time." A first bill from a sender with no
-  match offers "Treat bills from pge.com as a bill" after saving, which makes a
-  template from the saved expense.
-- **Receipts with line items:** the form lists them and lets you give an item
-  to one person; the rest splits as chosen (saved as a `tiered` split).
+  match offers a "Treat bills from pge.com as a bill" box on the form; ticked,
+  saving also makes a template from the expense, with the sender.
+- **Receipts with line items:** the review page lists them beside the
+  original. To give an item to one person, use the form's "Fixed amounts
+  first, then the rest" split (`tiered`).
 - **Unreadable** items, and every item when the reader is off, open the same
   form with blank fields and the original beside it.
 - Dismissing an item, or confirming it without "Keep the original", purges its
@@ -665,7 +671,9 @@ expense the owner can't see or a private one that isn't theirs.
   items, if any.
 - An item due before the next digest day doesn't wait: it gets its own email
   when it's read, saying when it's due.
-- People set their digest days on the You page.
+- People pick their digest days on the You page: the 10th and 25th (the
+  default), the 1st and 15th, the 1st, or "as each bill arrives" (no digest
+  days: each bill gets its own email once read).
 
 ### Forwarding setup
 

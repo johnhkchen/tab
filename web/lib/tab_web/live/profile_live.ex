@@ -18,6 +18,13 @@ defmodule TabWeb.ProfileLive do
     {"Something else", "other"}
   ]
 
+  @digests [
+    {"10-25", "On the 10th and the 25th", [10, 25]},
+    {"1-15", "On the 1st and the 15th", [1, 15]},
+    {"1", "On the 1st", [1]},
+    {"each", "As each bill arrives", []}
+  ]
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -78,6 +85,25 @@ defmodule TabWeb.ProfileLive do
         <.button class="w-full sm:w-auto" phx-disable-with="Saving…">Save</.button>
       </.form>
 
+      <.card title="Bills to check" id="digest">
+        <p class="mb-3 text-ink-soft">
+          Tab emails you about bills waiting for you to check. A bill due before then gets its own email.
+        </p>
+        <form id="digest_form" phx-submit="save_digest" class="flex flex-wrap items-end gap-2">
+          <div class="min-w-48 flex-1">
+            <.input
+              name="digest"
+              id="digest_days"
+              type="select"
+              label="Email me"
+              options={@digest_options}
+              value={digest_key(@profile.digest_days)}
+            />
+          </div>
+          <.button variant="soft" class="mb-2">Save</.button>
+        </form>
+      </.card>
+
       <.card title="Your account">
         <div class="flex flex-wrap gap-2">
           <.button variant="soft" navigate={~p"/users/settings"}>Email and password</.button>
@@ -99,6 +125,7 @@ defmodule TabWeb.ProfileLive do
        methods: profile.payment_methods,
        method_errors: [],
        kinds: @kinds,
+       digest_options: Enum.map(@digests, fn {key, label, _} -> {label, key} end),
        page_title: "You"
      )}
   end
@@ -110,6 +137,18 @@ defmodule TabWeb.ProfileLive do
        methods: methods_from(params),
        form: to_form(Accounts.change_profile(socket.assigns.profile, params["profile"] || %{}))
      )}
+  end
+
+  def handle_event("save_digest", %{"digest" => key}, socket) do
+    days = Enum.find_value(@digests, [10, 25], fn {k, _, days} -> k == key && days end)
+
+    case Accounts.update_digest_days(socket.assigns.current_scope, days) do
+      {:ok, profile} ->
+        {:noreply, socket |> assign(profile: profile) |> put_flash(:info, "Saved.")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "That didn't save. Try again.")}
+    end
   end
 
   def handle_event("add", _, socket) do
@@ -141,6 +180,9 @@ defmodule TabWeb.ProfileLive do
          )}
     end
   end
+
+  defp digest_key(days),
+    do: Enum.find_value(@digests, "custom", fn {k, _, d} -> d == days && k end)
 
   defp methods_from(params) do
     (params["methods"] || %{})

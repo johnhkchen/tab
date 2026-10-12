@@ -40,6 +40,7 @@ defmodule TabWeb.Layouts do
       <nav class="flex flex-wrap items-center gap-2 text-sm">
         <%= if @current_scope do %>
           <.link navigate={~p"/groups"} class="clay-chip px-3 py-1.5">Groups</.link>
+          <.link navigate={~p"/inbox"} class="clay-chip px-3 py-1.5">Bills to check</.link>
           <.link navigate={~p"/profile"} class="clay-chip px-3 py-1.5">You</.link>
           <.link
             href={~p"/users/log-out"}

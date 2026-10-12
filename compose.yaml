@@ -45,6 +45,10 @@ services:
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       SMTP_TLS: ${SMTP_TLS:-}
       TAB_MAIL_FROM: ${TAB_MAIL_FROM:-}
+      # Receiving forwarded bills through Resend; leave unset to skip it.
+      TAB_INBOUND_DOMAIN: ${TAB_INBOUND_DOMAIN:-}
+      RESEND_WEBHOOK_SECRET: ${RESEND_WEBHOOK_SECRET:-}
+      TAB_READS_PER_DAY: ${TAB_READS_PER_DAY:-30}
       # The release writes its runtime files here instead of its read-only install dir.
       RELEASE_TMP: /tmp
     ports:
@@ -63,6 +67,8 @@ services:
     # reach the AI provider.
     environment:
       HOME: /tmp
+      # Turns bill reading on (Claude Haiku). Unset, bills are typed in by hand.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     networks: [outside]
     mem_limit: 512m
 

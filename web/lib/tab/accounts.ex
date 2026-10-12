@@ -98,6 +98,16 @@ defmodule Tab.Accounts do
 
   defp get_profile_in_transaction(%Scope{user: user}), do: Repo.get!(Profile, user.id)
 
+  @doc "Which days of the month the bills-to-check digest goes out (phase 4). `[]` means one email per bill."
+  def update_digest_days(%Scope{} = scope, days) when is_list(days) do
+    Tab.DBError.as_user(scope, fn ->
+      scope
+      |> get_profile_in_transaction()
+      |> Ecto.Changeset.change(digest_days: days |> Enum.uniq() |> Enum.sort())
+      |> Repo.update()
+    end)
+  end
+
   ## Settings
 
   @doc """

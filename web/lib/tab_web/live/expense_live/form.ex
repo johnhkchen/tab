@@ -7,11 +7,12 @@ defmodule TabWeb.ExpenseLive.Form do
   Adding one suggests a split until you change the split yourself: a bill's
   usual split, or a temporary split for its dates, prorated by day when the
   bill covers a period (`Tab.Bills.Suggest`). `?template=` fills the form in
-  from a recurring bill.
+  from a recurring bill; `?item=` from a bill Tab read (phase 4), and saving it
+  goes through `Tab.Inbox.confirm/5`.
   """
   use TabWeb, :live_view
 
-  alias Tab.{Bills, Ledger}
+  alias Tab.{Bills, Inbox, Ledger}
   alias Tab.Bills.Suggest
   alias Tab.Ledger.Split
   alias TabWeb.{Format, GroupData}
@@ -127,6 +128,33 @@ defmodule TabWeb.ExpenseLive.Form do
           />
         </.card>
 
+        <.card :if={@item} title="From the bill you sent" id="from-bill">
+          <p class="text-sm text-ink-soft">
+            Tab filled this in from <.link navigate={~p"/inbox/#{@item}"} class="underline">the original</.link>.
+            Check each field before you save.
+          </p>
+          <p :if={@item.duplicate_of} class="mt-2 text-sm text-warn">
+            Someone added an expense with the same amount a few days apart. Check it isn't this one.
+          </p>
+          <div class="mt-3">
+            <.input
+              name="expense[keep_original]"
+              id="expense_keep_original"
+              type="checkbox"
+              label="Keep the original with the expense. Anyone who can see the expense can open it."
+              value={@f["keep_original"]}
+            />
+            <.input
+              :if={@offer_bill && @f["private"] != "true"}
+              name="expense[new_bill]"
+              id="expense_new_bill"
+              type="checkbox"
+              label={"Treat bills from #{@sender} as a bill, split like this one"}
+              value={@f["new_bill"]}
+            />
+          </div>
+        </.card>
+
         <.card :if={@f["private"] != "true"} title="Who's in, and how to split it">
           <p :if={@why} id="suggestion" class="clay-well mb-3 p-3 text-sm">{why_text(@why, @data)}</p>
           <.input
@@ -225,12 +253,22 @@ defmodule TabWeb.ExpenseLive.Form do
           {nil, nil, new_state(data)}
       end
 
+    {item, template, state} =
+      case params do
+        %{"item" => id} -> from_item(scope, data, fetch_item!(scope, id))
+        _ -> {nil, template, state}
+      end
+
+    sender = item && item.proposal["sender"]
+
     {:ok, overrides} = Bills.list_overrides(scope, data.group.id)
 
     {:ok,
      socket
      |> assign(data: data, expense: expense, errors: %{}, types: @types, rest_types: @rest_types)
      |> assign(template: template, overrides: overrides, suggesting: expense == nil, why: nil)
+     |> assign(item: item, sender: Tab.Inbox.Email.domain(sender) || sender)
+     |> assign(offer_bill: item != nil and template == nil and is_binary(sender))
      |> assign(state)
      |> assign(page_title: if(expense, do: "Edit expense", else: "Add an expense"))
      |> suggest()
@@ -245,6 +283,64 @@ defmodule TabWeb.ExpenseLive.Form do
     else
       _ -> raise GroupData.NotFound
     end
+  end
+
+  defp fetch_item!(scope, id) do
+    with {:ok, _} <- Ecto.UUID.cast(id),
+         {:ok, item} <- Inbox.get_item(scope, id),
+         true <- item.status in ~w(ready unreadable) do
+      item
+    else
+      _ -> raise GroupData.NotFound
+    end
+  end
+
+  # A read bill: its template's answers if it matched one in this group, then
+  # what the reader found on top. An autopay date stays the template's.
+  defp from_item(scope, data, item) do
+    template =
+      with id when is_binary(id) <- item.template_id,
+           {:ok, %{group_id: gid, deleted_at: nil} = t} when gid == data.group.id <-
+             Bills.get_template(scope, id) do
+        t
+      else
+        _ -> nil
+      end
+
+    state = if template, do: from_template(new_state(data), template, data), else: new_state(data)
+    p = item.proposal
+
+    read =
+      %{
+        "description" => if(template, do: nil, else: p["merchant"]),
+        "amount" => p["total_cents"] && Format.amount_input(p["total_cents"]),
+        "date" => if(template && template.autopay_day, do: nil, else: p["date"]),
+        "period_start" => p["period_start"],
+        "period_end" => p["period_start"] && p["period_end"],
+        "category_id" => if(template, do: nil, else: category_for(data, item.doc_type))
+      }
+      |> Enum.reject(fn {_, v} -> is_nil(v) end)
+      |> Map.new()
+
+    f =
+      state.f
+      |> Map.merge(read)
+      |> Map.merge(%{"keep_original" => "false", "new_bill" => "false"})
+
+    {item, template, %{state | f: f}}
+  end
+
+  @categories %{
+    "utility" => "Utilities",
+    "phone" => "Utilities",
+    "rent" => "Rent",
+    "travel" => "Travel",
+    "receipt" => "Groceries"
+  }
+
+  defp category_for(data, type) do
+    name = @categories[type]
+    Enum.find_value(data.categories, "", &(&1.name == name && &1.id))
   end
 
   # The template's answers in place of the blank form's.
@@ -390,6 +486,18 @@ defmodule TabWeb.ExpenseLive.Form do
       {:error, reason} ->
         {:noreply, put_flash(socket, :error, error_message(reason))}
     end
+  end
+
+  defp persist(
+         scope,
+         %{expense: nil, item: %{} = item, data: data, template: t, f: f, sender: sender},
+         attrs
+       ) do
+    Inbox.confirm(scope, item, data.group.id, Map.put(attrs, :template_id, t && t.id),
+      keep: f["keep_original"] == "true",
+      sender: sender,
+      new_bill: f["new_bill"] == "true" and f["private"] != "true"
+    )
   end
 
   defp persist(scope, %{expense: nil, data: data, template: t}, attrs),

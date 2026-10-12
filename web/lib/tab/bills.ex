@@ -42,6 +42,46 @@ defmodule Tab.Bills do
     end)
   end
 
+  @doc """
+  Makes a bill from an expense that came from a read bill, and ties the
+  expense to it: same name, category, payer, and split, with `sender` so the
+  next bill from them matches. A bill with that name already in the group is
+  left alone.
+  """
+  def create_template_from(%Scope{} = scope, %Tab.Ledger.Expense{} = e, sender) do
+    as_user(scope, fn ->
+      taken? =
+        Repo.exists?(
+          from t in Template,
+            where:
+              t.group_id == ^e.group_id and is_nil(t.deleted_at) and
+                fragment("lower(?)", t.name) == ^String.downcase(e.description)
+        )
+
+      if taken? do
+        {:ok, nil}
+      else
+        split = if e.split["type"] in ~w(equal exact percentage shares), do: e.split
+
+        with {:ok, t} <-
+               %Template{group_id: e.group_id}
+               |> Template.changeset(%{
+                 name: e.description,
+                 category_id: e.category_id,
+                 default_payer: e.paid_by,
+                 default_split: split
+               })
+               |> Ecto.Changeset.put_change(:sender, sender)
+               |> Repo.insert() do
+          from(x in Tab.Ledger.Expense, where: x.id == ^e.id)
+          |> Repo.update_all(set: [template_id: t.id])
+
+          {:ok, t}
+        end
+      end
+    end)
+  end
+
   def update_template(%Scope{} = scope, id, attrs) do
     as_user(scope, fn ->
       with {:ok, t} <- found(Repo.get(Template, id)) do

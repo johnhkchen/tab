@@ -34,6 +34,8 @@ defmodule TabWeb.Dev.NarrowController do
     {:ok, templates} = Bills.list_templates(scope, group.id)
     template = List.first(templates)
     {:ok, balances} = Ledger.balances(scope, group.id)
+    {:ok, items} = Tab.Inbox.list_items(scope)
+    item = Enum.find(items, &(&1.status == "ready"))
     me = {:user, scope.user.id}
     debtor = Enum.find_value(balances, &(&1.creditor == me && &1.debtor))
 
@@ -60,6 +62,10 @@ defmodule TabWeb.Dev.NarrowController do
       debtor && ~p"/groups/#{group}/remind/#{TabWeb.GroupData.party_key(debtor)}",
       statement,
       ~p"/s/not-a-real-token",
+      ~p"/inbox",
+      ~p"/inbox/forwarding",
+      item && ~p"/inbox/#{item}",
+      item && ~p"/groups/#{group}/expenses/new?item=#{item.id}",
       ~p"/profile",
       ~p"/users/settings",
       ~p"/welcome",

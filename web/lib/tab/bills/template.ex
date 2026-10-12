@@ -21,6 +21,8 @@ defmodule Tab.Bills.Template do
     field :autopay_day, :integer
     field :last_amount_cents, :integer
     field :last_logged_on, :date
+    # Whose bills these are, learned when someone confirms a read bill (phase 4).
+    field :sender, :string
     field :created_by, :binary_id
     field :deleted_at, :utc_datetime
 

@@ -8,7 +8,9 @@ function version() -> string {
 
 function route(req: baml.http.ServerRequest) -> baml.http.Response throws never {
     let path = req.url.split("?")[0];
-    if (path.ends_with("/health")) {
+    if (req.method == "POST" && path == "/read") {
+        handle_read(req)
+    } else if (path.ends_with("/health")) {
         baml.http.Response.new(
             200,
             { "content-type": "application/json" },

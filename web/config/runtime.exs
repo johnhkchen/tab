@@ -46,6 +46,18 @@ if extract_url = System.get_env("EXTRACT_URL") do
   config :tab, :extract_url, extract_url
 end
 
+# Receiving forwarded bills through Resend (docs/specification.md, "Configuration").
+# compose.yaml passes unset settings as empty strings; those count as unset.
+env = fn name -> if (value = System.get_env(name)) not in [nil, ""], do: value end
+
+if config_env() != :test do
+  config :tab,
+    inbound_domain: env.("TAB_INBOUND_DOMAIN"),
+    resend_webhook_secret: env.("RESEND_WEBHOOK_SECRET"),
+    resend_api_key: env.("RESEND_API_KEY"),
+    reads_per_day: String.to_integer(env.("TAB_READS_PER_DAY") || "30")
+end
+
 if config_env() == :prod do
   database_url =
     System.get_env("DATABASE_URL") ||

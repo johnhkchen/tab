@@ -45,3 +45,13 @@ config :phoenix,
 
 # Jobs run inline in tests; nothing polls the database.
 config :tab, Oban, testing: :manual
+
+# Phase 4: a receiving domain and webhook secret, and both outside services
+# answered by Req.Test stubs, never the network.
+config :tab,
+  inbound_domain: "bills.test",
+  resend_webhook_secret: "whsec_" <> Base.encode64("tab-test-webhook-secret-32-bytes"),
+  resend_api_key: "re_test",
+  reads_per_day: 30,
+  resend_req: [plug: {Req.Test, Tab.Inbox.Resend}],
+  reader_req: [plug: {Req.Test, Tab.Reader}]
