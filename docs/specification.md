@@ -1,6 +1,6 @@
-# Specification: phases 1 and 2
+# Specification: phases 1 to 3
 
-The buildable spec for the next two phases (see [ROADMAP.md](ROADMAP.md)). It
+The buildable spec for the phases built so far and the one in progress (see [ROADMAP.md](ROADMAP.md)). It
 distills the long-form product spec into decisions an engineer can build from.
 Where this file and the code disagree, fix one of them in the same commit.
 
@@ -308,15 +308,205 @@ payment methods visible to group-mates, a payment storing its method and
 reference, the reminder email, and unlimited expenses and full export with no
 caps on any plan.
 
+## Phase 3: Recurring bills and household tools
+
+Bills that come every month, people who go away for a while, and chasing money
+without awkward texts. Everything here builds on the phase 1 ledger: a logged bill
+is a normal expense, a suggestion is only a suggestion until someone saves it, and
+nothing here needs AI.
+
+### Decisions for this phase
+
+| Question | Decision |
+|---|---|
+| A bill's normal split | The recurring template's `default_split` when the bill comes from a template; otherwise an even split among current members, as in phase 2. Categories don't carry splits of their own. Decided 2026-10-12. |
+| Overlapping temporary splits | The database refuses two live overrides whose dates overlap on the same bills (an override with no category covers every category). Adding one that overlaps shows the clash and a combined suggestion for the shared days; when the admin confirms, Tab saves non-overlapping date ranges, so each day of each category has at most one override. Decided 2026-10-12. |
+| Matching payments to bills for float | Oldest first. Payments between two people pay off the oldest unpaid shares between them first, and a share owed the other way counts as repayment on its own date. Decided 2026-10-12. |
+| Statement links | Any member can make one for anyone in the group, member or outside party. It covers one calendar month, shows only that person's own charges and payments, never private expenses, works for 30 days, and anyone in the group can revoke it. Decided 2026-10-12. |
+| Override split types | `equal`, `percentage`, or `shares`: the types that don't depend on the amount, since an override covers bills not yet known. Templates may also use `exact` (rent split as fixed dollar amounts). Neither stores `tiered`; a tiered bill is still one edit away in the expense form. |
+| A prorated suggestion | Saved as a `shares` split with whole-number weights, reduced to lowest terms. It reproduces the blended amounts and still re-splits sensibly if someone edits the total. No new split type. |
+
+### Tables
+
+**recurring_templates**: `id`, `group_id`, `name` (unique per group among live
+templates), `category_id` (optional), `cadence` (`monthly` | `bimonthly` |
+`quarterly` | `custom_n_days` | `irregular`), `cadence_days` (required for
+`custom_n_days`, 1 to 366, otherwise null), `stability` (`fixed` | `variable`),
+`default_payer` (optional, a user who is or was a member), `default_split`
+(optional jsonb; `equal`, `exact`, `percentage`, or `shares`), `autopay_day`
+(optional, 1 to 31), `last_amount_cents` and `last_logged_on` (set by the
+database, never by people), `created_by`, `deleted_at`. The long-form spec lists
+`custom_n_days`; `quarterly` is added because "every 91 days" drifts.
+
+**expenses** gains `template_id` (optional, same group, shared expenses only).
+A trigger keeps the template's `last_amount_cents` and `last_logged_on` equal to
+its newest live expense, on insert, edit, and soft delete.
+
+**split_overrides**: `id`, `group_id`, `category_id` (null means every
+category), `effective_from`, `effective_until` (optional; null means until
+someone ends it), `split` (jsonb, see the decision above), `note` (like "Alex
+away"), `created_by`, `deleted_at`. A trigger refuses overlap with another live
+override in the same group whose categories collide (hint `override_overlap`),
+holding a per-group advisory lock so two admins can't race past it.
+
+**statement_links**: `id`, `group_id`, `token_hash`, exactly one of `user_id`
+(a user who is or was a member) or `counterparty_id`, `period_start` (first of a
+month), `period_end` (last day of that month), `expires_at` (30 days out, capped
+there by a trigger), `revoked_at`, `created_by`. The raw token appears once, in
+the link. A revoked link stays revoked.
+
+All three new tables are audited (`statement_links` without `token_hash`) and
+stamped (`created_by` from `auth.uid()`).
+
+### Row-level security for the new tables
+
+| Table | select | insert | update | delete |
+|---|---|---|---|---|
+| recurring_templates | members | members | members (all fields people set, and `deleted_at`) | none |
+| split_overrides | members | admins | admins (dates, category, split, note, `deleted_at`) | none |
+| statement_links | members | members | members (`revoked_at` only) | none |
+
+Reading a statement takes no sign-in: `read_statement(token)` is `SECURITY
+DEFINER` and returns one JSON document. It checks the token hash, expiry, and
+revocation, and every failure raises the same error (hint `invalid_statement`).
+The app calls it as `tab_user` with no person set (`Tab.Repo.as_nobody/1`), so
+the caller can't read any table directly. The document holds the group's name,
+the recipient's name, the month, that month's shared expenses with a share for
+the recipient (date, description, total, their share, who paid), payments to or
+from them that month (counted ones and waiting ones, marked), and where they
+stand today with each person they owe or who owes them.
+
+### Recurring templates and one-tap logging
+
+- The **Bills** page lists a group's templates: name, how often, about how much
+  (`last_amount_cents`), when last logged, and a **Log it** button. Members add,
+  edit, and remove templates there.
+- **Log it** opens the add-expense form filled in from the template:
+  description from the name, amount from `last_amount_cents`, category, payer
+  (`default_payer`, else you), split (see "Which split the form suggests"), date,
+  and the period the bill covers. Saving goes through `Tab.Ledger.create_expense`
+  like any expense: same policies, same audit log, with `template_id` set.
+- **Date:** with `autopay_day`, the latest occurrence of that day on or before
+  today, with day 31 (or 29, 30) clamped to the month's last day. Without it,
+  today. Always editable.
+- **Period:** ends the day before the date and reaches back one cadence: a
+  monthly bill dated Oct 3 covers Sep 3 to Oct 2. `irregular` leaves the period
+  empty. Always editable; the form shows "Bill covers" dates for every expense.
+- **Stability:** for a `fixed` template, an amount different from
+  `last_amount_cents` shows "Rent is usually $1,000.00" and Save needs a ticked
+  "Yes, the amount changed" box. A `variable` template asks nothing.
+
+### Temporary splits (time-bound overrides)
+
+- The **Temporary splits** page lists the group's overrides, current and coming
+  first. Admins add, edit, end, and remove them; members read them.
+- **Someone's away** is the quick way in: pick the person, the dates, and the
+  category (or all). Tab proposes the split without them: the template's
+  default split for that category with their share spread over the others by
+  their existing ratios, or an even split among the other current members. The
+  admin reviews and saves it.
+- An override applies only to expenses dated inside its window. After
+  `effective_until`, new expenses fall back to the normal split with no action.
+- **Combining overlaps:** saving an override that overlaps live ones shows each
+  clash and a combined suggestion for the shared days: each person's weight is
+  their fraction under one override times their fraction under the other, so
+  someone left out of either stays out. Confirming trims and splits the
+  existing rows and inserts the pieces in one transaction. If nobody is left in
+  both, there's no suggestion, and the admin writes the split for those days.
+
+### Which split the form suggests
+
+When adding an expense, until the person edits the split fields, the form
+suggests a split from the template (if any), the category, the date, and the
+period, and says why ("Alex is away for 12 of this bill's 30 days").
+
+1. Start from the normal split (the decision above).
+2. With no period: if an override covers the expense's date and category, use
+   its split in place of the normal one.
+3. With a period of `D` days: each override covering `d_k` of those days
+   (respecting category) weighs in for its days, and the normal split for the
+   remaining `D - Σ d_k`. Each person's weight is the sum over those pieces of
+   (their fraction of the bill under that piece's split) × (its days). An
+   `exact` normal split counts as fractions of this bill's amount. The result is
+   a `shares` split; people at zero drop out.
+
+Each bill is prorated against its own period, so an absence spanning two bills
+gives two separate fractions with no change to the stored override. This is
+day-based proration, the way a landlord prorates a mid-month move-out, not
+metering; the page never calls it usage. Editing an existing expense keeps its
+saved split.
+
+### Float: how long money waits
+
+`Tab.Ledger.Float` (pure Elixir) works from the expenses, shares, and payments
+the viewer can already see. No new table and no new visibility rule.
+
+- For each pair of parties, walk the money between them by date (expenses
+  before payments on the same day). A share opens a lot from the person who owes
+  to the person who paid. A payment, or a share owed the other way, closes the
+  oldest open lots first; anything left over opens a lot the other way.
+- A share's days are its repayment date minus the expense date (at least 0),
+  weighted by cents when it closes in parts; an open share counts up to today.
+- The group page shows, for each member who has paid for others, the average
+  days their money waits (weighted by cents). The expense page shows each share
+  as "paid back after 9 days" or "unpaid for 14 days".
+- Days only. No interest rate, no dollar cost of waiting.
+
+### Reminder drafts
+
+`Tab.Reminders` (pure Elixir string templates, no AI, no network) drafts three
+messages from one balance: a Venmo note (one line), a text (two or three
+sentences), and an email (subject and body). Each says how much, for what (the
+oldest open bills from the float walk, up to three, then "and N more"), and how
+to pay you (your payment methods). Tab never sends them; you copy one and send
+it from your own app.
+
+The **Ask for it** page (`/groups/:id/remind/:party`, linked from every "owes
+you" line) shows the three drafts with Copy buttons. **Add a statement link**
+makes a link for that person for a month you pick (this month by default) and
+puts it in the drafts. The page also lists that person's live links, with
+Revoke.
+
+### Statement page
+
+`/s/:token`, no sign-in, outside the signed-in pages: the month's activity for
+one person, as `read_statement` returns it, on the clay kit, at 360 px. An
+expired, revoked, or unknown link shows one plain "This link doesn't work
+anymore" page with a 404, whichever it was.
+
+### Tests that must pass before phase 4
+
+1. **Policy matrix** for `recurring_templates`, `split_overrides`, and
+   `statement_links`, every verb, as member, admin, and non-member, in raw SQL.
+2. **Statement links, straight against the database:** a link shows only its
+   recipient's slice of its own month; private expenses never appear; expired,
+   revoked, and made-up tokens fail alike; with no person set, every table
+   refuses reads.
+3. **Templates:** made by hand, logged with one tap at `last_amount_cents`,
+   producing an audited expense with `template_id`; `last_*` follows edits and
+   deletes; `fixed` asks for confirmation on a changed amount, `variable`
+   doesn't; `autopay_day` sets the date, clamped at month end, and stays editable.
+4. **Overrides:** "Alex away from utilities, Nov 1 to 30" applies to utilities
+   bills dated inside, never touches rent, and stops on its own after Nov 30;
+   overlaps are refused by the database and the combine flow saves the right
+   pieces; a 48-day absence over two monthly bills gives each bill its own
+   fraction (property tests: suggested shares always add up; zero days gives the
+   normal split; full overlap gives the override's).
+5. **Float:** a share paid back 9 days later shows 9; an unpaid share counts up
+   with today; partial payments, offsets, and overpayment follow oldest first.
+   **Drafts:** Venmo, text, and email render from the same balance.
+
+These cover the phase-3 items in the long-form spec's acceptance criteria (§9):
+recurring templates and one-tap logging, fixed versus variable stability,
+`autopay_day` dates, float, reminder drafts without AI, scoped statement links
+tested at the database, time-bound overrides with automatic reversion,
+overlap flagged rather than combined in silence, and per-bill proration.
+
 ## Deferred, with where it goes
 
 | Item | Phase |
 |---|---|
-| Recurring templates, one-tap logging, `autopay_day`, `fixed`/`variable` stability | 3 |
-| Time-bound split overrides and day-based proration over `period_start`/`period_end` | 3 |
-| Float tracking (days outstanding per share) | 3 |
-| Reminder drafts (Venmo, text, email) and per-recipient statement links | 3 |
-| Bill reading, digest schedule, due-date flags, recurrence detection | 4 |
+| Bill reading, digest schedule, due-date flags, recurrence detection (fills phase 3's `recurring_templates`) | 4 |
 | MCP server and OAuth | 5 |
 | Billing accounts, plans, trial, gifts, referrals, Pro owner features | 6 |
 

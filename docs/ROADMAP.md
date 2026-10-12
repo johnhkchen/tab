@@ -5,7 +5,7 @@ before the next one starts. The detailed, buildable spec for the current phases 
 [specification.md](specification.md); what happened and why is in
 [JOURNAL.md](JOURNAL.md).
 
-Status: **done**, **next**, or **later**.
+Status: **done**, **in progress**, **next**, or **later**.
 
 ## Phase 0: Foundation (done, v0.1.0, 2026-10-12)
 
@@ -32,11 +32,12 @@ Sign-in, groups, adding expenses, balances (overall and per category), settling 
 with confirmation, payment methods, CSV export, and email notifications.
 Spec: [specification.md §Phase 2](specification.md#phase-2-the-web-app-people-use).
 
-## Phase 3: Recurring bills and household tools (next)
+## Phase 3: Recurring bills and household tools (in progress)
 
 Recurring templates and one-tap logging, time-bound split overrides with day-based
 proration, float tracking (days money sits before it's repaid), reminder drafts
 for Venmo, text, and email, and per-recipient statement links.
+Spec: [specification.md §Phase 3](specification.md#phase-3-recurring-bills-and-household-tools).
 
 ## Phase 4: Reading bills (later)
 
