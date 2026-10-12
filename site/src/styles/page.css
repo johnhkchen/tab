@@ -6,8 +6,21 @@ body {
 	margin: 0;
 	background: var(--clay-bg);
 	color: var(--clay-ink);
-	font-size: 1.0625rem;
+	font-size: clamp(1rem, 0.95rem + 0.25vw, 1.0625rem);
 	line-height: 1.6;
+	overflow-wrap: break-word;
+}
+
+/* Headings break into even lines; paragraphs avoid a lonely last word. */
+h1,
+h2,
+h3 {
+	text-wrap: balance;
+}
+
+p,
+li {
+	text-wrap: pretty;
 }
 
 a {
@@ -26,7 +39,8 @@ main,
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
-	gap: 1rem;
+	flex-wrap: wrap;
+	gap: 0.5rem 1rem;
 	padding-top: 1.25rem;
 	padding-bottom: 1.25rem;
 }
@@ -66,17 +80,17 @@ h1 {
 }
 
 h2 {
-	font-size: 1.6rem;
+	font-size: clamp(1.35rem, 1.1rem + 1.1vw, 1.6rem);
 	margin: 3rem 0 1rem;
 }
 
 h3 {
-	font-size: 1.2rem;
+	font-size: clamp(1.1rem, 1rem + 0.45vw, 1.2rem);
 	margin: 0 0 0.5rem;
 }
 
 .lede {
-	font-size: 1.3rem;
+	font-size: clamp(1.15rem, 1rem + 0.7vw, 1.3rem);
 	color: var(--clay-ink-soft);
 	margin: 0 0 2rem;
 }
@@ -99,12 +113,12 @@ h3 {
 
 .shelf {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
 	gap: 1rem;
 }
 
 .shelf--pairs {
-	grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
 }
 
 .shelf p,
@@ -124,11 +138,13 @@ h3 {
 	border-top: 1px solid var(--clay-border);
 }
 
-ul.plain {
+ul.plain,
+.prose ul {
 	padding-left: 1.2rem;
 }
 
-ul.plain li {
+ul.plain li,
+.prose li {
 	margin: 0.35rem 0;
 }
 
@@ -138,4 +154,12 @@ ul.plain li {
 	background: var(--clay-well);
 	box-shadow: var(--clay-shadow-well);
 	margin: 1.5rem 0;
+}
+
+.note p {
+	margin: 0;
+}
+
+.note p + p {
+	margin-top: 0.75rem;
 }
