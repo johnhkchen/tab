@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-12: v0.1.0 released, website live, phase 1 built
+## 2026-10-12: v0.1.0 and v0.2.0 released; phases 1 and 2 built
 
 ### Done
 - Scaffolded the monorepo and released **v0.1.0**
@@ -25,14 +25,20 @@ this repo), **Gotchas**, **Next**.
   <https://tab.b28.dev>. Prices live in `site/src/data/plans.ts`, guarded by a test.
 - Vendored the `stop-slop` skill. Wrote `docs/ROADMAP.md` and
   `docs/specification.md` (phases 1–2).
-- **Phase 1 built** (unreleased): `mix phx.gen.auth --binary-id --live` for
+- **Phase 1 built**: `mix phx.gen.auth --binary-id --live` for
   sign-in; migrations `*_create_ledger.exs` (tables, triggers, audit, views,
   `accept_invite`, `set_expense_shares`) and `*_ledger_policies.exs` (grants and
   one policy per verb per table); `Tab.Ledger.Split`; contexts `Tab.Groups` and
   `Tab.Ledger` (all through `Tab.DBError.as_user/2`). Tests: policy matrix,
   ledger rules, split properties (StreamData), contexts. 227 web tests.
 
-- **Phase 2 built** (unreleased): mail through Resend, SMTP, or the log;
+- **v0.2.0 released** (phases 1 and 2):
+  <https://github.com/johnhkchen/tab/releases/tag/v0.2.0>. Images
+  `tab-web:0.2.0` and `tab-extract:0.2.0` pull anonymously; a fresh
+  `docker compose up` from them passes `/healthz`, serves the new sign-in page,
+  and logs the no-mail-provider warning. Website redeployed with the Email and
+  `TAB_CURRENCY` docs.
+- **Phase 2 built**: mail through Resend, SMTP, or the log;
   daisyUI removed and every page restyled on the clay kit with self-hosted
   fonts; one-field sign-in that also signs up; welcome, groups, group, add and
   edit expense (live share preview for every split type), expense with
@@ -103,6 +109,8 @@ this repo), **Gotchas**, **Next**.
   Recreate or update with `mise run access:apply`. Team domain
   `b28.cloudflareaccess.com`. The account has other Access apps for b28.dev.
 - **EmDash admin** set up by the maintainer, with the seed's home and pricing pages.
+- **Local machine:** the v0.2.0 smoke test ran `docker logout ghcr.io` to
+  prove anonymous pulls; log back in if you push images by hand.
 - **Doppler** `tab/prd`: `CLOUDFLARE_API_TOKEN` (project token "tab project",
   rolled once after an accidental print), `CLOUDFLARE_ACCOUNT_ID`,
   `D1_DATABASE_ID`. `tab/dev` has the two ids only.
@@ -152,8 +160,11 @@ this repo), **Gotchas**, **Next**.
   `check_function_bodies = off` because helpers refer to tables made later.
 
 ### Next
-- Release **v0.2.0** (phases 1 and 2): `mise run release`, then deploy the
-  website so the self-host docs' new Email section goes live with it.
+- **Start phase 3** (recurring bills and household tools): first distill its
+  section into `docs/specification.md` from `working_specification.md` (the
+  roadmap lists the pieces: recurring templates and one-tap logging, split
+  overrides with day-based proration over `period_start`/`period_end`, float
+  tracking, reminder drafts, per-recipient statement links). `expenses` already
+  has `period_start`/`period_end`. Mark phase 3 "in progress" in the roadmap.
 - Set up Resend for Cloud when hosting starts: verify the sending domain in
   Cloudflare DNS, put `RESEND_API_KEY` in Doppler `tab/prd`.
-- Specify phase 3 (recurring bills) from `working_specification.md`.

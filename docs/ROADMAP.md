@@ -19,20 +19,20 @@ Everything the ledger stands on, with nothing to log expenses with yet.
 - `mise` toolchain and tasks, CI, tag-driven releases to GHCR.
 - Public website at tab.b28.dev, admin behind Cloudflare Access.
 
-## Phase 1: The ledger, enforced by the database (done, unreleased, 2026-10-12)
+## Phase 1: The ledger, enforced by the database (done, v0.2.0, 2026-10-12)
 
 Groups, members, invites, expenses with every split type, payments, external
 counterparties, private expenses, and the audit log, each with row-level security
 policies per verb. Exit: the direct-database bypass tests pass for every table.
 Spec: [specification.md §Phase 1](specification.md#phase-1-the-ledger-enforced-by-the-database).
 
-## Phase 2: The web app people use (done, unreleased, 2026-10-12)
+## Phase 2: The web app people use (done, v0.2.0, 2026-10-12)
 
 Sign-in, groups, adding expenses, balances (overall and per category), settling up
 with confirmation, payment methods, CSV export, and email notifications.
 Spec: [specification.md §Phase 2](specification.md#phase-2-the-web-app-people-use).
 
-## Phase 3: Recurring bills and household tools (later)
+## Phase 3: Recurring bills and household tools (next)
 
 Recurring templates and one-tap logging, time-bound split overrides with day-based
 proration, float tracking (days money sits before it's repaid), reminder drafts
