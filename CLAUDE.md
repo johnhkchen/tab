@@ -26,7 +26,7 @@ row-level security. Monorepo:
 - **Nothing in the ledger may require AI.** `/healthz` stays 200 when extract is down.
 - **Versions live in four places** (`web/mix.exs`, `extract/baml_src/main.baml`,
   `compose.yaml`, `CHANGELOG.md`); `mise run version:check` keeps them in step.
-- **The pricing page must match the spec exactly** (spec §9): flat fee or cost +10%/+8%,
-  whichever is lower; under $3 not charged; extra reading off by default and capped.
+- **The pricing page must match the spec exactly** (spec §9): Hosted free $0, Plus $8/yr,
+  Pro $24/yr, billed yearly. Reaching the reading allowance pauses reading; never a charge.
 - **UI uses the b28 clay kit** (vendored in `web/` and `site/`; refresh both with
   `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`.
