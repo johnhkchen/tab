@@ -91,6 +91,7 @@ run = [
 [tasks."check:site"]
 depends = ["site:deps"]
 dir = "site"
+# pnpm check = astro check + the plan-price test (src/data/plans.test.ts).
 run = ["pnpm check", "pnpm build", "pnpm deploy:check"]
 
 [tasks."site:deps"]
@@ -98,13 +99,18 @@ dir = "site"
 run = "pnpm install --frozen-lockfile"
 
 [tasks."site:dev"]
-description = "Run the public website (landing, pricing, docs) with live reload"
+description = "Run the public website with live reload; seeds the landing and pricing pages into a local database"
 depends = ["site:deps"]
 dir = "site"
 run = "pnpm dev"
 
+[tasks."site:seed"]
+description = "Seed the landing and pricing pages into a running site:dev (safe to repeat; never overwrites edits)"
+dir = "site"
+run = "pnpm seed"
+
 [tasks."site:deploy"]
-description = "Publish the website to Cloudflare Workers (needs `wrangler login`)"
+description = "Publish the website to Cloudflare Workers (needs `wrangler login`; first-deploy steps in site/AGENTS.md)"
 depends = ["check:site"]
 dir = "site"
 run = "pnpm deploy"
