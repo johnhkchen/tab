@@ -29,7 +29,8 @@ row-level security. Monorepo:
 - **The pricing page must match the spec exactly** (spec §9): Hosted free $0, Plus $10/yr,
   Pro $24/yr, billed yearly; a once-a-year 6-month gift; a 3-month Plus trial for new
   accounts, extendable 6 months at a time on request, with best-effort reading (smaller
-  limit, lower priority than paying). No trial or gift ever charges. Reaching the reading allowance
+  limit, lower priority than paying); referrals earn 1/3/12 months (sign-up/Plus/Pro).
+  No trial, gift, or referral ever charges. Reaching the reading allowance
   pauses reading; never a charge.
 - **UI uses the b28 clay kit** (vendored in `web/` and `site/`; refresh both with
   `mise run sync-kit`). Copy follows the brand voice in `~/.claude/CLAUDE.md`.
