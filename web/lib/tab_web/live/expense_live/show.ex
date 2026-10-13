@@ -60,14 +60,11 @@ defmodule TabWeb.ExpenseLive.Show do
         </.list>
       </.card>
 
-      <.card :if={@kept != []} title="The original bill" id="kept">
-        <ul class="space-y-1">
-          <li :for={d <- @kept}>
-            <a href={~p"/documents/#{d.id}"} target="_blank" class="underline">
-              {d.filename || kept_label(d.kind)}
-            </a>
-          </li>
-        </ul>
+      <.card :if={@references != []} title="What arrived about this bill" id="references">
+        <TabWeb.Documents.list documents={@references} id="reference-list" />
+        <p class="mt-2 text-xs text-ink-soft">
+          Tab doesn't keep the originals. Whoever forwarded them can find each one with its search line.
+        </p>
       </.card>
 
       <.card title="History" id="history">
@@ -97,7 +94,7 @@ defmodule TabWeb.ExpenseLive.Show do
       end
 
     {:ok, history} = Ledger.history(scope, data.group.id, row_id: expense.id)
-    {:ok, kept} = Tab.Inbox.kept_documents(scope, expense.id)
+    {:ok, references} = Tab.Inbox.references(scope, expense.id)
 
     # How long each share has waited, or waited, to be paid back.
     waits =
@@ -118,7 +115,7 @@ defmodule TabWeb.ExpenseLive.Show do
        expense: expense,
        shares: Enum.sort_by(expense.shares, &GroupData.name(data, GroupData.share_party(&1))),
        history: history,
-       kept: kept,
+       references: references,
        waits: waits,
        can_edit: can_edit,
        page_title: expense.description
@@ -178,8 +175,4 @@ defmodule TabWeb.ExpenseLive.Show do
   defp split_label(%{"type" => "shares"}), do: "By shares"
   defp split_label(%{"type" => "tiered"}), do: "Fixed amounts first, then the rest"
   defp split_label(_), do: "Custom"
-
-  defp kept_label("photo"), do: "The photo"
-  defp kept_label("pdf"), do: "The PDF"
-  defp kept_label(_), do: "The email"
 end

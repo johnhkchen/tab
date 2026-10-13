@@ -16,8 +16,8 @@ defmodule Tab.Inbox.InboxDBTest do
     join!(housemate, group, owner)
     _ = create_group!(stranger, "Elsewhere")
 
-    doc = document!(owner)
-    item = item!(owner, doc)
+    item = item!(owner)
+    doc = document!(owner, item)
     shared = expense!(owner, group, 6_000, [{owner, 3_000}, {housemate, 3_000}])
     private = expense!(housemate, group, 900, [{housemate, 900}], visibility: "private")
 
@@ -33,26 +33,21 @@ defmodule Tab.Inbox.InboxDBTest do
     }
   end
 
-  defp document!(uid, data \\ "%PDF-1.4 a bill") do
+  defp document!(uid, item, data \\ "%PDF-1.4 a bill") do
     id = new_id()
 
     run!(
       uid,
-      "INSERT INTO documents (id, kind, content_type, byte_size, sha256, content) VALUES ($1, 'pdf', 'application/pdf', $2, $3, $4)",
-      [id, byte_size(data), {:bytes, :crypto.hash(:sha256, data)}, {:bytes, data}]
+      "INSERT INTO documents (id, item_id, kind, content_type, byte_size, sha256, content) VALUES ($1, $2, 'pdf', 'application/pdf', $3, $4, $5)",
+      [id, item, byte_size(data), {:bytes, :crypto.hash(:sha256, data)}, {:bytes, data}]
     )
 
     id
   end
 
-  defp item!(uid, doc) do
+  defp item!(uid) do
     id = new_id()
-
-    run!(uid, "INSERT INTO pending_items (id, document_id, source) VALUES ($1, $2, 'upload')", [
-      id,
-      doc
-    ])
-
+    run!(uid, "INSERT INTO pending_items (id, source) VALUES ($1, 'upload')", [id])
     id
   end
 
@@ -209,11 +204,12 @@ defmodule Tab.Inbox.InboxDBTest do
 
     test "nobody can file a document under someone else: it's stamped as theirs", ctx do
       id = new_id()
+      theirs = item!(ctx.stranger)
 
       run!(
         ctx.stranger,
-        "INSERT INTO documents (id, user_id, kind, content_type, byte_size, sha256, content) VALUES ($1, $2, 'pdf', 'application/pdf', 1, $3, 'x')",
-        [id, ctx.owner, {:bytes, :crypto.hash(:sha256, "x")}]
+        "INSERT INTO documents (id, user_id, item_id, kind, content_type, byte_size, sha256, content) VALUES ($1, $2, $3, 'pdf', 'application/pdf', 1, $4, 'x')",
+        [id, ctx.owner, theirs, {:bytes, :crypto.hash(:sha256, "x")}]
       )
 
       assert [[ctx.stranger]] == owner!("SELECT user_id::text FROM documents WHERE id = $1", [id])
@@ -234,16 +230,27 @@ defmodule Tab.Inbox.InboxDBTest do
                run(ctx.owner, "UPDATE pending_items SET status = 'dismissed'")
     end
 
-    test "an item can't point at someone else's document", ctx do
-      theirs = document!(ctx.stranger, "%PDF-1.4 theirs")
+    test "a document can't join someone else's item", ctx do
+      theirs = item!(ctx.stranger)
+      data = "%PDF-1.4 mine"
 
       assert refused?(
                run(
                  ctx.owner,
-                 "INSERT INTO pending_items (document_id, source) VALUES ($1, 'upload')",
-                 [theirs]
+                 "INSERT INTO documents (item_id, kind, content_type, byte_size, sha256, content) VALUES ($1, 'pdf', 'application/pdf', $2, $3, $4)",
+                 [theirs, byte_size(data), {:bytes, :crypto.hash(:sha256, data)}, {:bytes, data}]
                )
              )
+
+      assert refused?(
+               run(ctx.owner, "UPDATE documents SET item_id = $1 WHERE id = $2", [theirs, ctx.doc])
+             )
+
+      # Moving one between your own items is how a bill gathers its documents.
+      mine = item!(ctx.owner)
+
+      assert {:ok, %{num_rows: 1}} =
+               run(ctx.owner, "UPDATE documents SET item_id = $1 WHERE id = $2", [mine, ctx.doc])
     end
 
     test "an item suggests only a group its owner is in", ctx do

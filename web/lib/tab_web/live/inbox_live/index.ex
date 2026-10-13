@@ -196,13 +196,14 @@ defmodule TabWeb.InboxLive.Index do
   def title(item), do: item.proposal["merchant"] || source_name(item)
 
   defp source_name(%{source: "email"}), do: "A forwarded email"
-  defp source_name(%{document: %{kind: "pdf"}}), do: "A PDF"
+  defp source_name(%{documents: [%{kind: "pdf"} | _]}), do: "A PDF"
   defp source_name(_), do: "A photo"
 
   @doc false
   def summary(item) do
     [
       status(item),
+      length(item.documents) > 1 && "#{length(item.documents)} documents",
       item.due_on && "due #{format_date(item.due_on)}",
       item.duplicate_of && "looks like one already added"
     ]

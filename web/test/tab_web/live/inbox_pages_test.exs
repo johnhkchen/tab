@@ -62,7 +62,7 @@ defmodule TabWeb.InboxPagesTest do
     _ = ctx
   end
 
-  test "check a read bill and save it, keeping the original", %{conn: conn} = ctx do
+  test "check a read bill and save it; the original goes, a note stays", %{conn: conn} = ctx do
     item = read_bill!(ctx.scope, @electric)
 
     {:ok, _lv, html} = live(conn, ~p"/inbox")
@@ -86,20 +86,24 @@ defmodule TabWeb.InboxPagesTest do
     # Utilities, from the bill's type.
     assert html =~ "Utilities"
 
+    # Before saving, its owner can open the original.
+    [doc] = Repo.all(Tab.Inbox.Document)
+    resp = get(conn, ~p"/documents/#{doc.id}")
+    assert response(resp, 200) == "%PDF-1.4 bill"
+    assert get_resp_header(resp, "x-content-type-options") == ["nosniff"]
+
     {:ok, _show, html} =
       form
-      |> form("#expense_form", expense: %{keep_original: "true"})
+      |> form("#expense_form")
       |> render_submit()
       |> follow_redirect(conn)
 
-    assert html =~ "The original bill"
+    assert html =~ "What arrived about this bill"
     assert Repo.get!(Item, item.id).status == "confirmed"
 
-    # Sam, in the group, can open the kept original.
-    [doc] = Repo.all(Tab.Inbox.Document)
-    resp = get(as(conn, ctx.sam), ~p"/documents/#{doc.id}")
-    assert response(resp, 200) == "%PDF-1.4 bill"
-    assert get_resp_header(resp, "x-content-type-options") == ["nosniff"]
+    # After saving, nobody can open it, Sam included: only the note stays.
+    assert response(get(as(conn, ctx.sam), ~p"/documents/#{doc.id}"), 404)
+    assert response(get(as(conn, ctx.user), ~p"/documents/#{doc.id}"), 404)
   end
 
   test "a bill matching a template fills in its split and offers no new bill",
@@ -192,6 +196,64 @@ defmodule TabWeb.InboxPagesTest do
     {:ok, _, html} = live(conn, ~p"/groups/#{ctx.group}/bills")
     assert html =~ "Late"
     assert html =~ "check that it was paid"
+  end
+
+  test "two emails about one bill show as one, and the expense keeps a note of both",
+       %{conn: conn} = ctx do
+    email = fn subject, date, body ->
+      "From: Priya <priya@gmail.test>\r\nSubject: Fwd: #{subject}\r\nContent-Type: text/plain\r\n\r\n" <>
+        "---------- Forwarded message ---------\r\nFrom: <noreply@sfwater.org>\r\nDate: #{date}\r\n" <>
+        "Subject: #{subject}\r\n\r\n#{body}\r\n"
+    end
+
+    arrive = fn raw, fields ->
+      {:ok, item} =
+        Inbox.add(ctx.scope, %{
+          kind: "email",
+          content_type: "message/rfc822",
+          data: raw,
+          source: "email",
+          group_id: ctx.group.id
+        })
+
+      Req.Test.stub(Tab.Reader, &Req.Test.json(&1, fields))
+      :ok = perform_job(ReadWorker, %{item_id: item.id, user_id: ctx.user.id})
+      item
+    end
+
+    water = %{
+      "doc_type" => "utility",
+      "merchant" => "SFPUC",
+      "total_cents" => 4_210,
+      "due_on" => "2026-10-08"
+    }
+
+    item =
+      arrive.(
+        email.("Your New Water Bill!", "Thu, Sep 24, 2026 at 7:28 PM", "Due $42.10"),
+        Map.put(water, "kind", "notice")
+      )
+
+    arrive.(
+      email.("Autopay scheduled", "Fri, Oct 2, 2026 at 9:00 AM", "We'll take $42.10 on Oct 8"),
+      water
+      |> Map.merge(%{"kind" => "autopay_scheduled", "due_on" => nil, "paid_on" => "2026-10-08"})
+    )
+
+    {:ok, _, html} = live(conn, ~p"/inbox")
+    assert html =~ "2 documents"
+
+    {:ok, _, html} = live(conn, ~p"/inbox/#{item}")
+    assert html =~ "Bill is ready"
+    assert html =~ "Autopay scheduled"
+
+    {:ok, form, _} = live(conn, ~p"/groups/#{ctx.group}/expenses/new?item=#{item.id}")
+    {:ok, _, html} = form |> form("#expense_form") |> render_submit() |> follow_redirect(conn)
+
+    assert html =~ "What arrived about this bill"
+    assert html =~ "Autopay scheduled"
+    assert html =~ "Copy search"
+    assert html =~ "from:(noreply@sfwater.org)"
   end
 
   test "dropping a bill deletes it from the list", %{conn: conn} = ctx do

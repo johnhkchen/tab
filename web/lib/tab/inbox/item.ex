@@ -1,14 +1,14 @@
 defmodule Tab.Inbox.Item do
   @moduledoc """
-  A bill waiting for its person to check it (`pending_items`). `proposal` is
-  what the reader returned, after `Tab.Inbox.Proposal` checked it; it becomes
-  nothing until someone saves the expense.
+  A bill waiting for its person to check it (`pending_items`), with every
+  document that arrived about it. `proposal` is what the reader returned,
+  after `Tab.Inbox.Proposal` checked it, merged across those documents; it
+  becomes nothing until someone saves the expense.
   """
   use Tab.Schema
 
   schema "pending_items" do
     field :user_id, :binary_id
-    belongs_to :document, Tab.Inbox.Document
     field :source, :string
     field :status, :string, default: "reading"
     field :doc_type, :string
@@ -20,6 +20,8 @@ defmodule Tab.Inbox.Item do
     field :duplicate_of, :binary_id
     field :note, :string
     field :read_at, :utc_datetime
+
+    has_many :documents, Tab.Inbox.Document, preload_order: [asc: :inserted_at]
 
     timestamps()
   end

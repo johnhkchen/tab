@@ -44,7 +44,8 @@ defmodule Tab.Inbox.ReadWorker do
     case Reader.read(input) do
       {:ok, fields} ->
         {:ok, item} = Inbox.save_reading(scope, item, Proposal.validate(fields), sender)
-        Mail.maybe_due_soon(scope, item)
+        # A document that joined another bill or a saved expense says nothing new.
+        if item.status == "ready", do: Mail.maybe_due_soon(scope, item), else: :ok
 
       # Out of API credit: try again tomorrow; it refills each month.
       {:error, :paused} ->
@@ -75,7 +76,7 @@ defmodule Tab.Inbox.ReadWorker do
     :ok
   end
 
-  defp sender(%Email{from: from}), do: Email.address(from)
+  defp sender(%Email{sender: sender}), do: sender
   defp sender(_), do: nil
 
   defp limit, do: Application.get_env(:tab, :reads_per_day, 30)

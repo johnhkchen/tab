@@ -130,8 +130,10 @@ defmodule TabWeb.ExpenseLive.Form do
 
         <.card :if={@item} title="From the bill you sent" id="from-bill">
           <p class="text-sm text-ink-soft">
-            Tab filled this in from <.link navigate={~p"/inbox/#{@item}"} class="underline">the original</.link>.
-            Check each field before you save.
+            Tab filled this in from <.link navigate={~p"/inbox/#{@item}"} class="underline">
+              {if length(@item.documents) == 1, do: "the original", else: "#{length(@item.documents)} documents"}
+            </.link>. Check each field before you save. Tab then deletes the originals and keeps a
+            note of each, with a search line for finding it in your email.
           </p>
           <p :if={@item.duplicate_of} class="mt-2 text-sm text-warn">
             Someone added an expense with the same amount a few days apart. Check it isn't this one.
@@ -157,13 +159,6 @@ defmodule TabWeb.ExpenseLive.Form do
                 Add <.money cents={@item.proposal["previous_cents"]} />
               </button>
             </p>
-            <.input
-              name="expense[keep_original]"
-              id="expense_keep_original"
-              type="checkbox"
-              label="Keep the original with the expense. Anyone who can see the expense can open it."
-              value={@f["keep_original"]}
-            />
             <.input
               :if={@offer_bill && @f["private"] != "true"}
               name="expense[new_bill]"
@@ -345,7 +340,7 @@ defmodule TabWeb.ExpenseLive.Form do
     f =
       state.f
       |> Map.merge(read)
-      |> Map.merge(%{"keep_original" => "false", "new_bill" => "false", "carried" => "0.00"})
+      |> Map.merge(%{"new_bill" => "false", "carried" => "0.00"})
 
     {item, template, %{state | f: f}}
   end
@@ -519,7 +514,6 @@ defmodule TabWeb.ExpenseLive.Form do
          attrs
        ) do
     Inbox.confirm(scope, item, data.group.id, Map.put(attrs, :template_id, t && t.id),
-      keep: f["keep_original"] == "true",
       sender: sender,
       new_bill: f["new_bill"] == "true" and f["private"] != "true"
     )

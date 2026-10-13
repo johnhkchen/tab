@@ -25,8 +25,14 @@ Send Tab a bill and it fills in the expense for you to check.
   flagged.
 - A bill that hasn't come in a week after it usually does shows "Late" on
   the Bills page and in the digest, in case autopay stopped.
-- Keep the original with the expense if you like; otherwise Tab deletes it
-  once you save or drop the bill.
+- One bill, several emails: the "bill is ready" email, the autopay notice,
+  and the payment confirmation gather into one bill to check. One that
+  arrives after you saved the bill goes with that expense instead.
+- Tab doesn't keep originals. Once you save or drop a bill, Tab deletes them
+  and keeps a note of each on the expense (who sent it, when, the amount)
+  with a search line for finding it again in your email.
+- Forward bills by hand or with a filter: Tab reads the real sender and date
+  from a forwarded email, and spots the same email forwarded twice.
 - Self-hosting: set `ANTHROPIC_API_KEY` on `extract` to turn reading on
   (Claude Haiku), and `RESEND_WEBHOOK_SECRET` with `TAB_INBOUND_DOMAIN` to
   receive forwarded mail through Resend. Without them, bills are typed in by

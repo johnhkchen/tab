@@ -6,11 +6,23 @@ defmodule Tab.Inbox.Email do
 
   Uses gen_smtp's `:mimemail` with no charset conversion; text that isn't
   valid UTF-8 has its bad bytes replaced.
+
+  A message someone forwarded by hand comes from them, not the company. When
+  the body has a forwarded block (Gmail's "Forwarded message", Apple Mail's
+  "Begin forwarded message", Outlook's "Original Message"), `sender`,
+  `original_subject`, and `sent_on` come from it; otherwise from the headers.
   """
 
   @images ~w(jpeg png gif webp)
 
-  defstruct from: nil, subject: nil, text: "", part: nil, gmail_code: nil
+  defstruct from: nil,
+            subject: nil,
+            text: "",
+            part: nil,
+            gmail_code: nil,
+            sender: nil,
+            original_subject: nil,
+            sent_on: nil
 
   @type part :: {:pdf | :photo, content_type :: String.t(), filename :: String.t() | nil, binary}
 
@@ -21,6 +33,7 @@ defmodule Tab.Inbox.Email do
     from = header(headers, "from")
     subject = header(headers, "subject")
     text = body_text(parts)
+    fwd = forwarded(text)
 
     {:ok,
      %__MODULE__{
@@ -28,7 +41,10 @@ defmodule Tab.Inbox.Email do
        subject: subject,
        text: text,
        part: Enum.find_value(parts, &pdf/1) || Enum.find_value(parts, &image/1),
-       gmail_code: gmail_code(from, subject, text)
+       gmail_code: gmail_code(from, subject, text),
+       sender: address(fwd[:from] || from),
+       original_subject: fwd[:subject] || strip_fwd(subject),
+       sent_on: date_text(fwd[:date]) || date_text(header(headers, "date"))
      }}
   rescue
     _ -> {:error, :unreadable}
@@ -71,6 +87,75 @@ defmodule Tab.Inbox.Email do
 
       _ ->
         nil
+    end
+  end
+
+  @markers ~r/^-+ ?Forwarded message ?-+$|^Begin forwarded message:?$|^-+ ?Original Message ?-+$/im
+
+  # The From, Date or Sent, and Subject lines of the first forwarded block.
+  defp forwarded(text) do
+    case Regex.split(@markers, String.replace(text, "\r", ""), parts: 2) do
+      [_, rest] ->
+        rest
+        |> String.split("\n")
+        |> Enum.take(12)
+        |> Enum.reduce(%{}, fn line, acc ->
+          case Regex.run(~r/^\s*\*?(From|Date|Sent|Subject):\*?\s*(.+)$/i, line) do
+            [_, key, value] -> Map.put_new(acc, field(key), String.trim(value))
+            _ -> acc
+          end
+        end)
+
+      _ ->
+        %{}
+    end
+  end
+
+  defp field(key) do
+    case String.downcase(key) do
+      "from" -> :from
+      "subject" -> :subject
+      _ -> :date
+    end
+  end
+
+  defp strip_fwd(nil), do: nil
+  defp strip_fwd(subject), do: String.replace(subject, ~r/^((fwd?|fw|re):\s*)+/i, "")
+
+  @months ~w(jan feb mar apr may jun jul aug sep oct nov dec)
+
+  @doc ~S"""
+  The date in a mail Date line, in the shapes Gmail, Apple Mail, Outlook, and
+  the RFC 5322 header use.
+
+      iex> Tab.Inbox.Email.date_text("Fri, Aug 7, 2026 at 3:13 AM")
+      ~D[2026-08-07]
+      iex> Tab.Inbox.Email.date_text("Tue, 1 Sep 2026 19:34:00 -0700")
+      ~D[2026-09-01]
+      iex> Tab.Inbox.Email.date_text("Thursday, September 24, 2026 7:28 PM")
+      ~D[2026-09-24]
+      iex> Tab.Inbox.Email.date_text("soon")
+      nil
+  """
+  def date_text(nil), do: nil
+
+  def date_text(text) do
+    month_day_year = ~r/\b([A-Za-z]{3})[a-z]*\.? (\d{1,2}),? (\d{4})\b/
+    day_month_year = ~r/\b(\d{1,2}) ([A-Za-z]{3})[a-z]* (\d{4})\b/
+
+    case {Regex.run(month_day_year, text), Regex.run(day_month_year, text)} do
+      {[_, mon, day, year], _} -> make_date(year, mon, day)
+      {_, [_, day, mon, year]} -> make_date(year, mon, day)
+      _ -> nil
+    end
+  end
+
+  defp make_date(year, mon, day) do
+    with m when is_integer(m) <- Enum.find_index(@months, &(&1 == String.downcase(mon))),
+         {:ok, d} <- Date.new(String.to_integer(year), m + 1, String.to_integer(day)) do
+      d
+    else
+      _ -> nil
     end
   end
 

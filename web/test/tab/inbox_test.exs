@@ -232,19 +232,21 @@ defmodule Tab.InboxTest do
 
       item = Repo.get!(Item, ctx.item.id)
       assert {item.status, item.expense_id} == {"confirmed", expense.id}
-      doc = Repo.get!(Document, item.document_id)
+      doc = Repo.get_by!(Document, item_id: item.id)
       assert doc.content == nil and doc.purged_at
 
       # It can't be confirmed twice.
       assert {:error, _} = Inbox.confirm(ctx.priya, ctx.item, ctx.house.id, attrs(ctx))
     end
 
-    test "keeping the original lets the group open it", ctx do
-      {:ok, expense} = Inbox.confirm(ctx.priya, ctx.item, ctx.house.id, attrs(ctx), keep: true)
+    test "the group sees what arrived, as a reference, never the original", ctx do
+      {:ok, expense} = Inbox.confirm(ctx.priya, ctx.item, ctx.house.id, attrs(ctx))
 
-      assert {:ok, [doc]} = Inbox.kept_documents(ctx.sam, expense.id)
-      assert {:ok, %{content: @pdf}} = Inbox.content(ctx.sam, doc.id)
-      assert {:error, :not_found} = Inbox.content(user_scope_fixture(), doc.id)
+      assert {:ok, [doc]} = Inbox.references(ctx.sam, expense.id)
+      assert {doc.role, doc.amount_cents} == {"other", 8_420}
+      assert {:error, :not_found} = Inbox.content(ctx.sam, doc.id)
+      assert {:error, :not_found} = Inbox.content(ctx.priya, doc.id)
+      assert {:ok, []} = Inbox.references(user_scope_fixture(), expense.id)
     end
 
     test "a bad expense saves nothing at all", ctx do
@@ -252,12 +254,12 @@ defmodule Tab.InboxTest do
                Inbox.confirm(ctx.priya, ctx.item, ctx.house.id, attrs(ctx, %{amount_cents: -1}))
 
       assert Repo.get!(Item, ctx.item.id).status == "ready"
-      assert Repo.get!(Document, ctx.item.document_id).content == @pdf
+      assert Repo.get_by!(Document, item_id: ctx.item.id).content == @pdf
     end
 
     test "dismissing deletes the original", ctx do
       assert {:ok, _} = Inbox.dismiss(ctx.priya, ctx.item.id)
-      assert Repo.get!(Document, ctx.item.document_id).content == nil
+      assert Repo.get_by!(Document, item_id: ctx.item.id).content == nil
       assert {:ok, []} = Inbox.list_items(ctx.priya)
       assert {:error, :not_found} = Inbox.dismiss(ctx.sam, ctx.item.id)
     end
@@ -299,14 +301,28 @@ defmodule Tab.InboxTest do
 
       # Next month the name on the bill is different; the sender still matches.
       second = upload!(ctx.priya, "%PDF-1.4 next month")
-      reader_says(%{@utility | "merchant" => "Pacific Gas and Electric"})
+
+      reader_says(%{
+        @utility
+        | "merchant" => "Pacific Gas and Electric",
+          "total_cents" => 9_130,
+          "date" => "2026-11-03",
+          "due_on" => "2026-11-24"
+      })
+
       :ok = read!(ctx.priya, second)
 
       {:ok, _} =
         Inbox.save_reading(
           ctx.priya,
           item(ctx.priya, second),
-          Inbox.Proposal.validate(%{@utility | "merchant" => "Pacific Gas and Electric"}),
+          Inbox.Proposal.validate(%{
+            @utility
+            | "merchant" => "Pacific Gas and Electric",
+              "total_cents" => 9_130,
+              "date" => "2026-11-03",
+              "due_on" => "2026-11-24"
+          }),
           "billing@mail.pge.com"
         )
 
@@ -337,6 +353,218 @@ defmodule Tab.InboxTest do
       {:ok, [template]} = Bills.list_templates(ctx.priya, ctx.house.id)
       assert {template.name, template.sender} == {"Electric", "pge.com"}
       assert Repo.get!(Expense, expense.id).template_id == template.id
+    end
+  end
+
+  describe "one bill, several documents" do
+    defp forwarded(sender, subject, date, body) do
+      """
+      From: Priya <priya@gmail.test>\r
+      To: elm@bills.test\r
+      Subject: Fwd: #{subject}\r
+      Content-Type: text/plain\r
+      \r
+      ---------- Forwarded message ---------\r
+      From: <#{sender}>\r
+      Date: #{date}\r
+      Subject: #{subject}\r
+      To: <priya@gmail.test>\r
+      \r
+      #{body}\r
+      """
+    end
+
+    defp mail!(scope, group_id, raw, fields) do
+      {:ok, item} =
+        Inbox.add(scope, %{
+          kind: "email",
+          content_type: "message/rfc822",
+          data: raw,
+          source: "email",
+          group_id: group_id
+        })
+
+      reader_says(fields)
+      :ok = read!(scope, item)
+      item(scope, item)
+    end
+
+    @notice %{
+      "doc_type" => "utility",
+      "kind" => "notice",
+      "merchant" => "SFPUC",
+      "total_cents" => 11_870,
+      "due_on" => "2026-10-08"
+    }
+
+    test "a notice, the scheduled autopay, and the payment make one bill", ctx do
+      first =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@sfwater.org",
+            "Your New Water Bill!",
+            "Thu, Sep 24, 2026 at 7:28 PM",
+            "Amount Due: $118.70"
+          ),
+          @notice
+        )
+
+      assert first.status == "ready"
+
+      second =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@sfwater.org",
+            "Autopay scheduled",
+            "Fri, Oct 2, 2026 at 9:00 AM",
+            "We'll charge $118.70 on Oct 8"
+          ),
+          %{@notice | "kind" => "autopay_scheduled", "due_on" => nil}
+          |> Map.put("paid_on", "2026-10-08")
+        )
+
+      assert second.status == "merged"
+
+      third =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@sfwater.org",
+            "Payment received",
+            "Thu, Oct 8, 2026 at 6:00 AM",
+            "Thanks for your payment of $118.70"
+          ),
+          %{@notice | "kind" => "payment", "due_on" => nil} |> Map.put("paid_on", "2026-10-08")
+        )
+
+      assert third.status == "merged"
+
+      {:ok, [item]} = Inbox.list_items(ctx.priya)
+      assert item.id == first.id
+      assert Enum.map(item.documents, & &1.role) == ~w(notice autopay_scheduled payment)
+      assert Enum.all?(item.documents, &(&1.sender == "noreply@sfwater.org"))
+      assert item.proposal["paid_on"] == "2026-10-08"
+      assert item.proposal["kind"] == "notice"
+
+      # Different amount from the same company: a different bill.
+      other =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@sfwater.org",
+            "Your New Water Bill!",
+            "Sat, Oct 24, 2026 at 7:28 PM",
+            "Amount Due: $98.10"
+          ),
+          %{@notice | "total_cents" => 9_810, "due_on" => "2026-11-08"}
+        )
+
+      assert other.status == "ready"
+    end
+
+    test "a payment for a bill already saved goes with that expense", ctx do
+      {:ok, expense} =
+        Tab.Ledger.create_expense(ctx.priya, ctx.house.id, %{
+          description: "Recology",
+          amount_cents: 16_450,
+          date: ~D[2026-08-28],
+          paid_by: ctx.priya.user.id,
+          split: Suggest.equal([{:user, ctx.priya.user.id}, {:user, ctx.sam.user.id}])
+        })
+
+      item =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@recology.com",
+            "Approved Recurring Payment",
+            "Tue, Sep 1, 2026 at 7:34 PM",
+            "Your payment of 164.50 was approved on 8/31/2026."
+          ),
+          %{
+            "doc_type" => "utility",
+            "kind" => "payment",
+            "merchant" => "Recology Sunset Scavenger",
+            "total_cents" => 16_450,
+            "paid_on" => "2026-08-31"
+          }
+        )
+
+      assert item.status == "merged"
+      assert item.note =~ "Recology"
+      assert {:ok, []} = Inbox.list_items(ctx.priya)
+
+      # Sam sees what arrived, with a search line to find it, but not the email.
+      assert {:ok, [doc]} = Inbox.references(ctx.sam, expense.id)
+
+      assert {doc.role, doc.sender, doc.purged_at != nil} ==
+               {"payment", "noreply@recology.com", true}
+
+      assert doc.search =~ "from:(noreply@recology.com)"
+      assert doc.search =~ "after:2026/08/31"
+    end
+
+    test "the same email forwarded again is caught, though its bytes differ", ctx do
+      body = "Amount Due: $118.70"
+      date = "Thu, Sep 24, 2026 at 7:28 PM"
+
+      mail!(
+        ctx.priya,
+        ctx.house.id,
+        forwarded("noreply@sfwater.org", "Your New Water Bill!", date, body),
+        @notice
+      )
+
+      again =
+        String.replace(
+          forwarded("noreply@sfwater.org", "Your New Water Bill!", date, body),
+          "To: elm@",
+          "To: again@"
+        )
+
+      assert {:error, :duplicate} =
+               Inbox.add(ctx.priya, %{
+                 kind: "email",
+                 content_type: "message/rfc822",
+                 data: again,
+                 source: "email"
+               })
+    end
+
+    test "merging keeps what's known and lets a full bill win" do
+      old = %{
+        "kind" => "notice",
+        "total_cents" => 100,
+        "due_on" => "2026-10-08",
+        "period_start" => nil,
+        "past_due" => true
+      }
+
+      new = %{
+        "kind" => "payment",
+        "total_cents" => 100,
+        "paid_on" => "2026-10-08",
+        "due_on" => nil,
+        "past_due" => false
+      }
+
+      m = Inbox.merge(old, new)
+
+      assert {m["kind"], m["due_on"], m["paid_on"], m["past_due"]} ==
+               {"notice", "2026-10-08", "2026-10-08", true}
+
+      bill = %{"kind" => "bill", "total_cents" => 120, "period_start" => "2026-09-01"}
+      m = Inbox.merge(old, bill)
+
+      assert {m["kind"], m["total_cents"], m["period_start"], m["due_on"]} ==
+               {"bill", 120, "2026-09-01", "2026-10-08"}
     end
   end
 

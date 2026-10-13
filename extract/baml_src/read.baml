@@ -17,6 +17,8 @@ class ReadLine {
 
 class ReadResult {
     doc_type: string,
+    kind: string,
+    paid_on: string?,
     merchant: string?,
     total_cents: int?,
     current_cents: int?,
@@ -97,6 +99,8 @@ function read_bill(r: ReadRequest, client: ai.Client? = null) -> Bill? {
 function to_result(b: Bill) -> ReadResult {
     ReadResult {
         doc_type: b.doc_type.to_string().to_lower_case(),
+        kind: kind_name(b.kind),
+        paid_on: b.paid_on,
         merchant: b.merchant,
         total_cents: cents(b.total),
         current_cents: cents(b.current_charges),
@@ -166,4 +170,16 @@ function cents(printed: string?) -> int? {
 // Anthropic's answer when the account has no credit left.
 function out_of_credit(failure: string) -> bool {
     failure.to_lower_case().index_of("credit balance is too low") != null
+}
+
+// DocKind as the web app names it.
+function kind_name(k: DocKind) -> string {
+    match (k) {
+        DocKind.Bill => "bill",
+        DocKind.Notice => "notice",
+        DocKind.AutopayScheduled => "autopay_scheduled",
+        DocKind.Payment => "payment",
+        DocKind.Reminder => "reminder",
+        DocKind.Other => "other",
+    }
 }

@@ -106,6 +106,19 @@ this repo), **Gotchas**, **Next**.
   place and rebuilt dev and test databases. `mix tab.mail.pull --route`
   routes pulled mail by address, like the webhook. Doppler `tab/dev` has
   `RESEND_API_KEY` and `TAB_INBOUND_DOMAIN=bills.tab.b28.dev`.
+- **One bill, several documents** (maintainer's calls): same company and
+  amount within 45 days, or same due date, is one bill; a document for a bill
+  already saved attaches to the expense; originals are never kept, only a
+  reference with a search line ("keep a search term reference but don't
+  store sensitive documents"), which replaced "Keep the original"; built
+  before v0.4.0. `documents.item_id` replaces `pending_items.document_id`
+  (unreleased migration changed in place; down now drops with CASCADE).
+  The reader returns `kind` (bill, notice, autopay_scheduled, payment,
+  reminder, other) and `paid_on`; the email parser takes sender, subject,
+  and date from the forwarded block. On the maintainer's 3 real forwarded
+  emails (PG&E notice, Recology payment, SFPUC notice) the kinds, senders,
+  dates, and amounts came out right; the PG&E due date varies between runs
+  (the email prints it bare beside the amount).
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one

@@ -11,6 +11,7 @@ defmodule Tab.Inbox.Proposal do
   """
 
   @types ~w(utility receipt subscription rent travel phone other)
+  @kinds ~w(bill notice autopay_scheduled payment reminder other)
   @max_cents 100_000_000
   @window_days 730
 
@@ -23,6 +24,8 @@ defmodule Tab.Inbox.Proposal do
 
     %{
       "doc_type" => if(raw["doc_type"] in @types, do: raw["doc_type"], else: "other"),
+      "kind" => if(raw["kind"] in @kinds, do: raw["kind"], else: "other"),
+      "paid_on" => date(raw["paid_on"], today),
       "merchant" => text(raw["merchant"], 120),
       "total_cents" => total,
       "date" => date(raw["date"], today),

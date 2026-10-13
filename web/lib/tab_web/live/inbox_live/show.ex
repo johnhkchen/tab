@@ -91,27 +91,35 @@ defmodule TabWeb.InboxLive.Show do
         </button>
       </.card>
 
-      <.card title="The original" id="original">
+      <.card
+        title={
+          if length(@item.documents) == 1, do: "The original", else: "What arrived about this bill"
+        }
+        id="original"
+      >
+        <TabWeb.Documents.list
+          :if={length(@item.documents) > 1}
+          documents={@item.documents}
+          id="item-documents"
+        />
         <img
-          :if={@item.document.kind == "photo"}
-          src={~p"/documents/#{@item.document_id}"}
+          :if={@main && @main.kind == "photo"}
+          src={~p"/documents/#{@main.id}"}
           alt="The photo you sent"
-          class="max-h-[32rem] w-full rounded-xl object-contain"
+          class="mt-3 max-h-[32rem] w-full rounded-xl object-contain"
         />
         <p :if={@attachment}>
-          <a
-            href={~p"/documents/#{@item.document_id}?part=attachment"}
-            target="_blank"
-            class="underline"
-          >
+          <a href={~p"/documents/#{@main.id}?part=attachment"} target="_blank" class="underline">
             Open the attached {if elem(@attachment, 0) == :pdf, do: "PDF", else: "image"}
           </a>
         </p>
-        <p :if={@item.document.kind == "pdf"}>
-          <a href={~p"/documents/#{@item.document_id}"} target="_blank" class="underline">Open the PDF</a>
+        <p :if={@main && @main.kind == "pdf"}>
+          <a href={~p"/documents/#{@main.id}"} target="_blank" class="underline">Open the PDF</a>
         </p>
         <div :if={@email} class="mt-3 text-sm">
-          <p class="text-ink-soft">From {@email.from} · {@email.subject}</p>
+          <p class="text-ink-soft">
+            From {@email.sender || @email.from} · {@email.original_subject || @email.subject}
+          </p>
           <pre class="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words font-body">{@email.text}</pre>
         </div>
       </.card>
@@ -148,23 +156,28 @@ defmodule TabWeb.InboxLive.Show do
     end
   end
 
+  # The document shown in full: the bill itself if one arrived, else the first.
   defp assign_item(socket, item) do
+    main =
+      Enum.find(item.documents, &(&1.role == "bill" and is_nil(&1.purged_at))) ||
+        Enum.find(item.documents, &is_nil(&1.purged_at))
+
     {email, attachment} =
-      with "email" <- item.document.kind,
-           {:ok, doc} <- Inbox.content(socket.assigns.current_scope, item.document_id),
+      with %{kind: "email", id: id} <- main,
+           {:ok, doc} <- Inbox.content(socket.assigns.current_scope, id),
            {:ok, email} <- Email.parse(doc.content) do
         {email, email.part}
       else
         _ -> {nil, nil}
       end
 
-    assign(socket, item: item, email: email, attachment: attachment)
+    assign(socket, item: item, main: main, email: email, attachment: attachment)
   end
 
   @impl true
   def handle_info(:inbox_changed, socket) do
     case Inbox.get_item(socket.assigns.current_scope, socket.assigns.item.id) do
-      {:ok, item} -> {:noreply, assign(socket, item: item)}
+      {:ok, item} -> {:noreply, assign_item(socket, item)}
       _ -> {:noreply, socket}
     end
   end

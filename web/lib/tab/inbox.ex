@@ -151,33 +151,34 @@ defmodule Tab.Inbox do
   def looks_like?(_, _), do: false
 
   @doc false
-  # Stores a document and its pending item, then queues the reading. Used by
-  # uploads and by received mail (as the person it was for).
+  # Stores a document and a pending item for it, then queues the reading.
+  # Used by uploads and by received mail (as the person it was for). After
+  # reading, the document may join another item about the same bill.
   def add(%Scope{} = scope, %{kind: kind, data: data} = doc) do
     sha = :crypto.hash(:sha256, data)
+    ref = reference(kind, data)
 
     result =
       as_user(scope, fn ->
-        since = DateTime.add(now(), -90, :day)
-
-        if Repo.exists?(from d in Document, where: d.sha256 == ^sha and d.inserted_at > ^since) do
+        if seen?(sha, ref.fingerprint) do
           {:error, :duplicate}
         else
-          document = %Document{
-            kind: kind,
-            content_type: doc.content_type,
-            filename: doc[:filename] && String.slice(doc.filename, 0, 255),
-            byte_size: byte_size(data),
-            sha256: sha,
-            content: data
-          }
-
-          with {:ok, d} <- Repo.insert(document),
-               {:ok, item} <-
-                 Repo.insert(%Item{
-                   document_id: d.id,
-                   source: doc.source,
-                   group_id: doc[:group_id]
+          with {:ok, item} <-
+                 Repo.insert(%Item{source: doc.source, group_id: doc[:group_id]}),
+               {:ok, _} <-
+                 Repo.insert(%Document{
+                   item_id: item.id,
+                   kind: kind,
+                   content_type: doc.content_type,
+                   filename: doc[:filename] && String.slice(doc.filename, 0, 255),
+                   byte_size: byte_size(data),
+                   sha256: sha,
+                   content: data,
+                   fingerprint: ref.fingerprint,
+                   sender: ref.sender,
+                   subject: ref.subject,
+                   sent_at: ref.sent_at,
+                   search: ref.search
                  }) do
             {:ok, item}
           end
@@ -190,9 +191,66 @@ defmodule Tab.Inbox do
     end
   end
 
+  # The same file, or the same email forwarded again, in the last 90 days.
+  defp seen?(sha, fingerprint) do
+    since = DateTime.add(now(), -90, :day)
+    q = from d in Document, where: d.inserted_at > ^since
+
+    Repo.exists?(where(q, [d], d.sha256 == ^sha)) or
+      (fingerprint != nil and Repo.exists?(where(q, [d], d.fingerprint == ^fingerprint)))
+  end
+
+  # Who sent an email, its subject and date, a fingerprint that survives
+  # forwarding it again, and a line for searching for it in a mailbox.
+  defp reference("email", data) do
+    case Email.parse(data) do
+      {:ok, %Email{sender: sender, original_subject: subject, sent_on: on}} ->
+        fingerprint =
+          if sender && subject && on,
+            do: :crypto.hash(:sha256, Enum.join([sender, String.downcase(subject), on], "\n"))
+
+        %{
+          fingerprint: fingerprint,
+          sender: sender && String.slice(sender, 0, 320),
+          subject: subject && String.slice(subject, 0, 500),
+          sent_at: on && NaiveDateTime.new!(on, ~T[00:00:00]),
+          search: search(sender, subject, on)
+        }
+
+      _ ->
+        %{fingerprint: nil, sender: nil, subject: nil, sent_at: nil, search: nil}
+    end
+  end
+
+  defp reference(_, _),
+    do: %{fingerprint: nil, sender: nil, subject: nil, sent_at: nil, search: nil}
+
+  @doc ~S"""
+  A search line for finding an email again in the mailbox it came from, in
+  the form Gmail understands (and people can read).
+
+      iex> Tab.Inbox.search("noreply@sfwater.org", "Your New SFPUC Water Bill!", ~D[2026-09-24])
+      ~s|from:(noreply@sfwater.org) subject:("Your New SFPUC Water Bill!") after:2026/09/23 before:2026/09/26|
+      iex> Tab.Inbox.search(nil, nil, nil)
+      nil
+  """
+  def search(nil, nil, _), do: nil
+
+  def search(sender, subject, on) do
+    [
+      sender && "from:(#{sender})",
+      subject && ~s|subject:("#{String.replace(subject, "\"", "")}")|,
+      on && "after:#{Calendar.strftime(Date.add(on, -1), "%Y/%m/%d")}",
+      on && "before:#{Calendar.strftime(Date.add(on, 2), "%Y/%m/%d")}"
+    ]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join(" ")
+    |> String.slice(0, 1000)
+  end
+
   ## Pending items
 
-  @doc "Items still waiting on the person, newest first, with their document's details (not its content)."
+  @doc "Items still waiting on the person, newest first, with their documents' details (not their content)."
   def list_items(%Scope{} = scope) do
     as_user(scope, fn ->
       {:ok,
@@ -200,7 +258,7 @@ defmodule Tab.Inbox do
          from i in Item,
            where: i.status in @open,
            order_by: [desc: i.inserted_at],
-           preload: [document: ^document_meta()]
+           preload: [documents: ^document_meta()]
        )}
     end)
   end
@@ -214,29 +272,38 @@ defmodule Tab.Inbox do
 
   def get_item(%Scope{} = scope, id) do
     as_user(scope, fn ->
-      found(Repo.one(from i in Item, where: i.id == ^id, preload: [document: ^document_meta()]))
+      found(Repo.one(from i in Item, where: i.id == ^id, preload: [documents: ^document_meta()]))
     end)
   end
 
+  @meta [
+    :id,
+    :user_id,
+    :item_id,
+    :kind,
+    :content_type,
+    :filename,
+    :byte_size,
+    :role,
+    :sender,
+    :subject,
+    :sent_at,
+    :amount_cents,
+    :search,
+    :expense_id,
+    :purged_at,
+    :inserted_at
+  ]
+
   defp document_meta do
     from d in Document,
-      select:
-        struct(d, [
-          :id,
-          :user_id,
-          :kind,
-          :content_type,
-          :filename,
-          :byte_size,
-          :expense_id,
-          :purged_at,
-          :inserted_at
-        ])
+      select: struct(d, ^@meta),
+      order_by: [asc_nulls_last: d.sent_at, asc: d.inserted_at]
   end
 
   @doc """
-  A document's bytes, if the person may see it: their own, or one kept with an
-  expense they can see. `{:error, :not_found}` once purged.
+  A document's bytes, if the person may see it and it's still there. Once its
+  bill is saved or dropped, `{:error, :not_found}`: only the reference stays.
   """
   def content(%Scope{} = scope, document_id) do
     as_user(scope, fn ->
@@ -247,25 +314,24 @@ defmodule Tab.Inbox do
     end)
   end
 
-  @doc "The documents kept with an expense (details only)."
-  def kept_documents(%Scope{} = scope, expense_id) do
+  @doc """
+  What arrived about an expense's bill: kind, sender, subject, date, amount,
+  and a search line. Everyone who can see the expense sees these; the
+  originals themselves are gone.
+  """
+  def references(%Scope{} = scope, expense_id) do
     as_user(scope, fn ->
-      {:ok,
-       Repo.all(
-         from d in document_meta(),
-           where: d.expense_id == ^expense_id and is_nil(d.purged_at),
-           order_by: d.inserted_at
-       )}
+      {:ok, Repo.all(from d in document_meta(), where: d.expense_id == ^expense_id)}
     end)
   end
 
-  @doc "Drops an item: it's not a bill, or not one to share. Its original is deleted."
+  @doc "Drops an item: it's not a bill, or not one to share. Its originals are deleted."
   def dismiss(%Scope{} = scope, id) do
     as_user(scope, fn ->
       with {:ok, item} <- found(Repo.get(Item, id)),
            true <- item.status in @open || {:error, :not_found},
-           {:ok, item} <- item |> Ecto.Changeset.change(status: "dismissed") |> Repo.update(),
-           :ok <- purge(item.document_id) do
+           {:ok, item} <- item |> Ecto.Changeset.change(status: "dismissed") |> Repo.update() do
+        purge(item.id)
         {:ok, item}
       end
     end)
@@ -273,9 +339,9 @@ defmodule Tab.Inbox do
 
   @doc """
   Turns an item into an expense in `group_id`, with `attrs` as the form would
-  pass to `Tab.Ledger.create_expense/3`. Options:
+  pass to `Tab.Ledger.create_expense/3`. The item's originals are deleted;
+  their references stay with the expense. Options:
 
-    * `keep: true` keeps the original with the expense instead of deleting it,
     * `sender: "pge.com"` remembers the sender on the expense's template,
     * `new_bill: true` makes a template from the expense (with the sender).
 
@@ -284,7 +350,7 @@ defmodule Tab.Inbox do
   def confirm(%Scope{} = scope, %Item{} = item, group_id, attrs, opts \\ []) do
     Repo.transaction(fn ->
       with {:ok, expense} <- Ledger.create_expense(scope, group_id, attrs),
-           {:ok, _} <- finish(scope, item, expense, opts),
+           {:ok, _} <- finish(scope, item, expense),
            {:ok, _} <- remember(scope, expense, opts) do
         expense
       else
@@ -293,7 +359,7 @@ defmodule Tab.Inbox do
     end)
   end
 
-  defp finish(scope, item, expense, opts) do
+  defp finish(scope, item, expense) do
     as_user(scope, fn ->
       with {:ok, item} <- found(Repo.get(Item, item.id)),
            true <- item.status in @open || {:error, :not_found},
@@ -302,31 +368,21 @@ defmodule Tab.Inbox do
              |> Ecto.Changeset.change(
                status: "confirmed",
                expense_id: expense.id,
-               group_id: group_id(expense)
+               group_id: expense.group_id
              )
-             |> Repo.update(),
-           :ok <- keep_or_purge(item.document_id, expense, opts[:keep]) do
+             |> Repo.update() do
+        from(d in Document, where: d.item_id == ^item.id)
+        |> Repo.update_all(set: [expense_id: expense.id, updated_at: now()])
+
+        purge(item.id)
         {:ok, item}
       end
     end)
   end
 
-  defp group_id(%Expense{group_id: id}), do: id
-
-  defp keep_or_purge(document_id, expense, true) do
-    from(d in Document, where: d.id == ^document_id and not is_nil(d.content))
-    |> Repo.update_all(set: [expense_id: expense.id, updated_at: now()])
-
-    :ok
-  end
-
-  defp keep_or_purge(document_id, _, _), do: purge(document_id)
-
-  defp purge(document_id) do
-    from(d in Document, where: d.id == ^document_id and not is_nil(d.content))
+  defp purge(item_id) do
+    from(d in Document, where: d.item_id == ^item_id and not is_nil(d.content))
     |> Repo.update_all(set: [content: nil, updated_at: now()])
-
-    :ok
   end
 
   defp remember(scope, %Expense{template_id: tid} = expense, opts) when is_binary(tid) do
@@ -375,13 +431,16 @@ defmodule Tab.Inbox do
   end
 
   @doc false
-  # The document's bytes and, for an email, the part worth reading.
-  def reader_input(%Scope{} = scope, %Item{document_id: id}) do
-    with {:ok, d} <- content(scope, id) do
+  # The newest document's bytes and, for an email, the part worth reading.
+  def reader_input(%Scope{} = scope, %Item{documents: [_ | _] = docs}) do
+    with {:ok, d} <- content(scope, List.last(docs).id) do
       case d.kind do
         "email" ->
           with {:ok, email} <- Email.parse(d.content) do
-            base = %{subject: email.subject, from: email.from}
+            base = %{
+              subject: email.original_subject || email.subject,
+              from: email.sender || email.from
+            }
 
             case email.part do
               {kind, type, _name, data} ->
@@ -410,32 +469,203 @@ defmodule Tab.Inbox do
     end
   end
 
+  def reader_input(_, _), do: {:error, :not_found}
+
   @doc false
-  # Saves what the reader proposed, with the template it matches, the group to
-  # suggest, and any likely duplicate.
+  # Saves what the reader found. The document then joins, in order: another
+  # open item about the same bill, an expense someone already saved for it,
+  # or stays in this item, ready to check. "The same bill" is the same company
+  # and amount within 45 days, or the same company and due date.
   def save_reading(%Scope{} = scope, %Item{} = item, proposal, sender) do
     broadcast(scope, do_save_reading(scope, item, proposal, sender))
   end
 
   defp do_save_reading(scope, item, proposal, sender) do
     as_user(scope, fn ->
-      with {:ok, item} <- found(Repo.get(Item, item.id)) do
-        template = match_template(proposal["merchant"], sender, item.group_id)
+      with {:ok, item} <-
+             found(Repo.one(from i in Item, where: i.id == ^item.id, preload: :documents)) do
+        proposal = Map.put(proposal, "sender", sender)
+        doc = List.last(item.documents)
+        label(doc, proposal)
+        key = bill_key(proposal, item.group_id, doc)
 
-        item
-        |> Ecto.Changeset.change(
-          status: "ready",
-          doc_type: proposal["doc_type"],
-          proposal: Map.put(proposal, "sender", sender),
-          due_on: proposal["due_on"] && Date.from_iso8601!(proposal["due_on"]),
-          template_id: template && template.id,
-          group_id: item.group_id || (template && template.group_id) || only_group(),
-          duplicate_of: duplicate(proposal),
-          read_at: now()
-        )
-        |> Repo.update()
+        cond do
+          other = same_open_item(item, key) -> join_item(item, doc, other, proposal)
+          expense = same_expense(key) -> join_expense(item, doc, expense)
+          true -> ready(item, proposal, sender)
+        end
       end
     end)
+  end
+
+  defp label(nil, _), do: :ok
+
+  defp label(doc, p) do
+    from(d in Document, where: d.id == ^doc.id)
+    |> Repo.update_all(set: [role: p["kind"], amount_cents: amount(p), updated_at: now()])
+  end
+
+  defp amount(p), do: p["period_cents"] || p["total_cents"]
+
+  # What identifies a bill: who it's from, how much, and when.
+  defp bill_key(p, group_id, doc) do
+    %{
+      companies: companies(p["sender"], p["merchant"]),
+      amount: amount(p),
+      due_on: p["due_on"],
+      on:
+        Enum.find_value(~w(due_on paid_on date), &(p[&1] && Date.from_iso8601!(p[&1]))) ||
+          (doc && doc.sent_at && NaiveDateTime.to_date(doc.sent_at)) || Date.utc_today(),
+      group_id: group_id
+    }
+  end
+
+  @doc ~S"""
+  A company's names for matching: the sender's domain without its ending,
+  and the merchant name squeezed to letters and digits.
+
+      iex> Tab.Inbox.companies("donotreply@billpay.pge.com", "PG&E")
+      ["pge"]
+      iex> Tab.Inbox.companies("noreply@recology.com", "Recology Sunset Scavenger")
+      ["recology", "recologysunsetscavenger"]
+  """
+  def companies(sender, merchant) do
+    domain =
+      case Email.domain(sender) do
+        nil -> nil
+        d -> d |> String.split(".") |> hd()
+      end
+
+    [domain, squeeze(merchant)] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq()
+  end
+
+  defp squeeze(nil), do: nil
+  defp squeeze(name), do: name |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")
+
+  # The same company when one name holds the other: "recology" and
+  # "recologysunsetscavenger".
+  defp same_company?(a, b) do
+    pairs = for x <- a, y <- b, do: {x, y}
+
+    Enum.any?(pairs, fn {x, y} ->
+      String.length(x) >= 3 and String.length(y) >= 3 and
+        (String.contains?(x, y) or String.contains?(y, x))
+    end)
+  end
+
+  defp same_bill?(key, other) do
+    same_company?(key.companies, other.companies) and
+      ((key.amount != nil and key.amount == other.amount and
+          abs(Date.diff(key.on, other.on)) <= 45) or
+         (key.due_on != nil and key.due_on == other.due_on))
+  end
+
+  defp same_open_item(item, key) do
+    from(i in Item,
+      where: i.id != ^item.id and i.status in ~w(ready unreadable waiting),
+      preload: :documents
+    )
+    |> then(fn q ->
+      if key.group_id,
+        do: where(q, [i], i.group_id == ^key.group_id or is_nil(i.group_id)),
+        else: q
+    end)
+    |> Repo.all()
+    |> Enum.find(fn other ->
+      same_bill?(key, bill_key(other.proposal, other.group_id, List.first(other.documents)))
+    end)
+  end
+
+  defp same_expense(%{companies: []}), do: nil
+  defp same_expense(%{amount: nil}), do: nil
+
+  defp same_expense(key) do
+    q =
+      from e in Expense,
+        left_join: t in Template,
+        on: t.id == e.template_id,
+        where:
+          is_nil(e.deleted_at) and e.visibility == "shared" and e.amount_cents == ^key.amount and
+            e.date >= ^Date.add(key.on, -45) and e.date <= ^Date.add(key.on, 45),
+        select: {e, t.sender}
+
+    q = if key.group_id, do: where(q, [e], e.group_id == ^key.group_id), else: q
+
+    q
+    |> Repo.all()
+    |> Enum.find_value(fn {e, sender} ->
+      names =
+        Enum.reject([sender && hd(String.split(sender, ".")), squeeze(e.description)], &is_nil/1)
+
+      if same_company?(names, key.companies), do: e
+    end)
+  end
+
+  # This document is about a bill already waiting to be checked: it joins it,
+  # filling in what that one didn't say, and this item closes.
+  defp join_item(item, doc, other, p) do
+    from(d in Document, where: d.id == ^doc.id)
+    |> Repo.update_all(set: [item_id: other.id, updated_at: now()])
+
+    merged = merge(other.proposal, p)
+
+    {:ok, _} =
+      other
+      |> Ecto.Changeset.change(
+        proposal: merged,
+        status: if(other.status == "unreadable", do: "ready", else: other.status),
+        due_on: other.due_on || (merged["due_on"] && Date.from_iso8601!(merged["due_on"]))
+      )
+      |> Repo.update()
+
+    close(item, "joined another bill")
+  end
+
+  # This document is about a bill someone already saved: it goes with that
+  # expense as a reference, and this item closes.
+  defp join_expense(item, doc, expense) do
+    from(d in Document, where: d.id == ^doc.id)
+    |> Repo.update_all(set: [expense_id: expense.id, updated_at: now()])
+
+    purge(item.id)
+    close(item, "added to #{String.slice(expense.description, 0, 80)}")
+  end
+
+  defp close(item, note) do
+    item |> Ecto.Changeset.change(status: "merged", note: note, read_at: now()) |> Repo.update()
+  end
+
+  # Fields the item doesn't have yet come from the new document; a full
+  # bill's fields win; past due sticks once any document says so.
+  @doc false
+  def merge(old, new) do
+    base =
+      if new["kind"] == "bill",
+        do: Map.merge(old, reject_nil(new)),
+        else: Map.merge(reject_nil(new), reject_nil(old))
+
+    base
+    |> Map.put("past_due", old["past_due"] == true or new["past_due"] == true)
+    |> Map.put("kind", if(new["kind"] == "bill", do: "bill", else: old["kind"] || new["kind"]))
+  end
+
+  defp reject_nil(map), do: map |> Enum.reject(fn {_, v} -> is_nil(v) end) |> Map.new()
+
+  defp ready(item, proposal, sender) do
+    template = match_template(proposal["merchant"], sender, item.group_id)
+
+    item
+    |> Ecto.Changeset.change(
+      status: "ready",
+      doc_type: proposal["doc_type"],
+      proposal: proposal,
+      due_on: proposal["due_on"] && Date.from_iso8601!(proposal["due_on"]),
+      template_id: template && template.id,
+      group_id: item.group_id || (template && template.group_id) || only_group(),
+      duplicate_of: duplicate(proposal),
+      read_at: now()
+    )
+    |> Repo.update()
   end
 
   @doc false

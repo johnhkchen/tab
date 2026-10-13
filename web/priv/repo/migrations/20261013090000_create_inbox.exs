@@ -32,15 +32,19 @@ defmodule Tab.Repo.Migrations.CreateInbox do
       %{select: @mine, insert: nil, update: nil}
     },
     documents: {
-      ["SELECT", "INSERT", "UPDATE (expense_id, content, purged_at, updated_at)"],
+      [
+        "SELECT",
+        "INSERT",
+        "UPDATE (item_id, expense_id, content, purged_at, role, amount_cents, search, updated_at)"
+      ],
       %{
         # A kept document is as visible as its expense: the subquery runs
         # under the reader's own policies on expenses.
         select:
           "#{@mine} OR (expense_id IS NOT NULL AND EXISTS " <>
             "(SELECT 1 FROM expenses e WHERE e.id = documents.expense_id))",
-        insert: @mine,
-        update: {@mine, @mine}
+        insert: "#{@mine} AND ledger.document_item_ok(documents)",
+        update: {@mine, "#{@mine} AND ledger.document_item_ok(documents)"}
       }
     },
     pending_items: {
@@ -99,37 +103,15 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
     execute "CREATE INDEX inbound_messages_user ON inbound_messages (user_id, received_at)"
 
-    execute """
-    CREATE TABLE documents (
-      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-      user_id uuid NOT NULL REFERENCES users (id),
-      kind text NOT NULL CHECK (kind IN ('photo', 'pdf', 'email')),
-      content_type text NOT NULL CHECK (char_length(content_type) <= 100),
-      filename text CHECK (char_length(filename) <= 255),
-      byte_size integer NOT NULL CHECK (byte_size > 0 AND byte_size <= 10485760),
-      sha256 bytea NOT NULL CHECK (octet_length(sha256) = 32),
-      content bytea,
-      expense_id uuid REFERENCES expenses (id),
-      purged_at timestamp(0),
-      #{@stamps},
-      CHECK ((content IS NULL) = (purged_at IS NOT NULL)),
-      CHECK (content IS NULL OR octet_length(content) = byte_size),
-      CHECK (kind <> 'photo' OR byte_size <= 2097152)
-    )
-    """
-
-    execute "CREATE INDEX documents_user_sha ON documents (user_id, sha256)"
-
-    execute "CREATE INDEX documents_expense ON documents (expense_id) WHERE expense_id IS NOT NULL"
-
+    # A pending item is one bill; its documents are everything that arrived
+    # about it (the statement, a "bill is ready" email, autopay notices).
     execute """
     CREATE TABLE pending_items (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid NOT NULL REFERENCES users (id),
-      document_id uuid NOT NULL REFERENCES documents (id),
       source text NOT NULL CHECK (source IN ('upload', 'email')),
       status text NOT NULL DEFAULT 'reading'
-        CHECK (status IN ('reading', 'ready', 'unreadable', 'waiting', 'confirmed', 'dismissed')),
+        CHECK (status IN ('reading', 'ready', 'unreadable', 'waiting', 'confirmed', 'dismissed', 'merged')),
       doc_type text
         CHECK (doc_type IN ('utility', 'receipt', 'subscription', 'rent', 'travel', 'phone', 'other')),
       proposal jsonb NOT NULL DEFAULT '{}' CHECK (jsonb_typeof(proposal) = 'object'),
@@ -146,6 +128,43 @@ defmodule Tab.Repo.Migrations.CreateInbox do
     """
 
     execute "CREATE INDEX pending_items_user ON pending_items (user_id, status, inserted_at)"
+
+    # `content` is the original, deleted once its bill is saved or dropped.
+    # The rest is a reference that stays: what it was, who sent it, when, and
+    # a search line for finding it in the mailbox it came from.
+    execute """
+    CREATE TABLE documents (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id uuid NOT NULL REFERENCES users (id),
+      item_id uuid NOT NULL REFERENCES pending_items (id),
+      kind text NOT NULL CHECK (kind IN ('photo', 'pdf', 'email')),
+      content_type text NOT NULL CHECK (char_length(content_type) <= 100),
+      filename text CHECK (char_length(filename) <= 255),
+      byte_size integer NOT NULL CHECK (byte_size > 0 AND byte_size <= 10485760),
+      sha256 bytea NOT NULL CHECK (octet_length(sha256) = 32),
+      fingerprint bytea CHECK (octet_length(fingerprint) = 32),
+      content bytea,
+      role text
+        CHECK (role IN ('bill', 'notice', 'autopay_scheduled', 'payment', 'reminder', 'other')),
+      sender text CHECK (char_length(sender) <= 320),
+      subject text CHECK (char_length(subject) <= 500),
+      sent_at timestamp(0),
+      amount_cents bigint CHECK (amount_cents > 0),
+      search text CHECK (char_length(search) <= 1000),
+      expense_id uuid REFERENCES expenses (id),
+      purged_at timestamp(0),
+      #{@stamps},
+      CHECK ((content IS NULL) = (purged_at IS NOT NULL)),
+      CHECK (content IS NULL OR octet_length(content) = byte_size),
+      CHECK (kind <> 'photo' OR byte_size <= 2097152)
+    )
+    """
+
+    execute "CREATE INDEX documents_user_sha ON documents (user_id, sha256)"
+    execute "CREATE INDEX documents_user_fingerprint ON documents (user_id, fingerprint)"
+    execute "CREATE INDEX documents_item ON documents (item_id)"
+
+    execute "CREATE INDEX documents_expense ON documents (expense_id) WHERE expense_id IS NOT NULL"
 
     execute "ALTER TABLE recurring_templates ADD COLUMN sender text CHECK (sender = lower(sender) AND char_length(sender) BETWEEN 3 AND 320)"
 
@@ -223,12 +242,21 @@ defmodule Tab.Repo.Migrations.CreateInbox do
     CREATE FUNCTION ledger.pending_refs_ok(p pending_items) RETURNS boolean
       LANGUAGE sql STABLE SET search_path = pg_catalog, public
       AS $$
-        SELECT EXISTS (SELECT 1 FROM documents d WHERE d.id = p.document_id AND d.user_id = p.user_id)
-          AND (p.group_id IS NULL OR auth.is_member(p.group_id))
+        SELECT (p.group_id IS NULL OR auth.is_member(p.group_id))
           AND (p.template_id IS NULL OR EXISTS (
                 SELECT 1 FROM recurring_templates t WHERE t.id = p.template_id))
           AND (p.expense_id IS NULL OR EXISTS (SELECT 1 FROM expenses e WHERE e.id = p.expense_id))
           AND (p.duplicate_of IS NULL OR EXISTS (SELECT 1 FROM expenses e WHERE e.id = p.duplicate_of))
+      $$
+    """
+
+    # A document belongs to one of its owner's own items. SECURITY INVOKER: the
+    # lookup sees only the caller's items.
+    execute """
+    CREATE FUNCTION ledger.document_item_ok(d documents) RETURNS boolean
+      LANGUAGE sql STABLE SET search_path = pg_catalog, public
+      AS $$
+        SELECT EXISTS (SELECT 1 FROM pending_items i WHERE i.id = d.item_id AND i.user_id = d.user_id)
       $$
     """
 
@@ -255,6 +283,8 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
     execute "REVOKE EXECUTE ON FUNCTION ledger.pending_refs_ok(pending_items) FROM PUBLIC"
     execute "GRANT EXECUTE ON FUNCTION ledger.pending_refs_ok(pending_items) TO tab_user"
+    execute "REVOKE EXECUTE ON FUNCTION ledger.document_item_ok(documents) FROM PUBLIC"
+    execute "GRANT EXECUTE ON FUNCTION ledger.document_item_ok(documents) TO tab_user"
   end
 
   def down do
@@ -265,9 +295,10 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
     # CASCADE takes the pending_items policies that call it.
     execute "DROP FUNCTION ledger.pending_refs_ok(pending_items) CASCADE"
+    execute "DROP FUNCTION IF EXISTS ledger.document_item_ok(documents) CASCADE"
 
-    for table <- ~w(pending_items documents inbound_messages forwarding_addresses) do
-      execute "DROP TABLE #{table}"
+    for table <- ~w(documents pending_items inbound_messages forwarding_addresses) do
+      execute "DROP TABLE #{table} CASCADE"
     end
 
     for fun <- ["guard_document()", "guard_forwarding_address()"] do

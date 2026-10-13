@@ -523,7 +523,9 @@ reader switched off.
 | Receiving mail on self-host | Resend inbound. The self-hoster points a domain's MX at Resend (or uses their account's `<id>.resend.app` address), and Resend posts an `email.received` webhook to Tab. Tab never runs a mail server, so no port 25, no MX on the Tab server, no spam filtering of its own. Cloud uses the same path until the Cloudflare relay arrives with the Cloud edition (phase 6). Replaces the long-form spec's `gen_smtp` listener. Decided 2026-10-13. |
 | Whose key reads bills | One Anthropic key for the whole server, `ANTHROPIC_API_KEY`, set on the `extract` service only (Doppler or `.env`). The web app never holds it. Model: Claude Haiku 5.5 (`claude-haiku-5-5`), fixed, not a setting. Per-person keys wait for Cloud. Decided 2026-10-13. |
 | What phase 4 covers | Photo and PDF upload, forwarded email with a setup guide, the review list, matching bills to phase 3 templates, and the digest. Submission links for people without an account wait for the Cloud edition, since their cost lands on the issuer's allowance. Decided 2026-10-13. |
-| The original document | Deleted once its item is confirmed or dismissed. A "Keep the original" box on the review form attaches it to the expense instead, visible to everyone who can see the expense. Decided 2026-10-13. |
+| The original document | Deleted once its bill is saved or dropped, always: Tab doesn't store bills' sensitive originals. What stays with the expense is a reference anyone who can see the expense can read: what it was, who sent it, the subject, the date, the amount, and a search line (Gmail's syntax, readable anywhere) for finding it in the mailbox it came from. Decided 2026-10-13, replacing "Keep the original". |
+| One bill, several documents | A pending item is one bill and holds every document about it: the statement, a "bill is ready" email, autopay scheduled, payment made, a reminder. After reading, a document joins an open item for the same bill, else goes with an expense already saved for it (as a reference; no new item), else becomes its own item. The same bill: the same company (sender's domain or merchant, one name holding the other) and the same amount within 45 days, or the same company and due date. Decided 2026-10-13. |
+| Forwarded by hand | The sender, subject, and date come from the forwarded block (Gmail, Apple Mail, Outlook), not the forwarder's headers. The same email forwarded twice is caught by sender, subject, and date, since its bytes differ. |
 | A balance carried from earlier bills | The form fills in this period's charges only (`period_cents`: the printed current charges, else total minus the carried balance), so a bill already logged never counts twice. A "Carried over from earlier bills" field, 0 by default, adds to it; when the bill shows a carried balance, the form offers it in one tap. It also takes late fees and other surprises. Decided 2026-10-13. |
 | A past-due bill | Flagged "Past due" in Bills to check, on the bill, and on the form, with a note to check autopay. No extra email. Decided 2026-10-13. |
 | Late bills | A regular bill (not `irregular`) shows "Late" on the Bills page when nothing has been logged a week past one cadence after the last one, and the digest lists it for whoever usually pays it, or everyone in the group when nobody's set. Needs no reading. Decided 2026-10-13. |
@@ -560,14 +562,18 @@ retried webhook lands once), `user_id` (null until matched), `status`
 `subject`. Written as the connection owner by the webhook handler, never by a
 person; the owner can read their own.
 
-**documents**: `id`, `user_id`, `kind` (`photo` | `pdf` | `email`),
-`content_type`, `filename`, `byte_size`, `sha256`, `content` (`bytea`, null once
-purged), `expense_id` (set when kept), `purged_at`, `created_at`. Size caps: 10
+**documents**: `id`, `user_id`, `item_id` (the bill it's about; it moves when
+bills join), `kind` (`photo` | `pdf` | `email`), `content_type`, `filename`,
+`byte_size`, `sha256`, `fingerprint` (sender, subject, and date of an email),
+`content` (`bytea`, null once purged), `role` (`bill` | `notice` |
+`autopay_scheduled` | `payment` | `reminder` | `other`), `sender`, `subject`,
+`sent_at`, `amount_cents`, `search`, `expense_id` (the expense it's a
+reference for), `purged_at`, `created_at`. Size caps: 10
 MB for a PDF or a raw email, 2 MB for a photo after the browser resizes it.
 
-**pending_items**: `id`, `user_id`, `document_id`, `source` (`upload` |
-`email`), `status` (`reading` | `ready` | `unreadable` | `waiting` |
-`confirmed` | `dismissed`), `doc_type` (see below), `proposal` (jsonb, what the
+**pending_items**: `id`, `user_id`, `source` (`upload` | `email`), `status`
+(`reading` | `ready` | `unreadable` | `waiting` | `confirmed` | `dismissed` |
+`merged`, for an item whose document joined another bill or a saved expense), `doc_type` (see below), `proposal` (jsonb, what the
 reader returned, validated), `due_on`, `template_id` (a suggested match),
 `group_id` (suggested), `expense_id` (set on confirm), `duplicate_of` (a likely
 duplicate expense, for the warning), `read_at`, `created_at`.
@@ -589,7 +595,7 @@ is audited like any other.
 |---|---|---|---|---|
 | forwarding_addresses | owner | owner, for a group they're in | owner (`revoked_at` only) | none |
 | inbound_messages | owner | none (webhook only) | none | none |
-| documents | owner; members of the expense's group once kept | owner | owner (`expense_id`, purge: `content` to null with `purged_at`) | none |
+| documents | owner; members of the expense's group once it's a reference for an expense | owner, on their own item | owner (`item_id` to their own item, `expense_id`, `role`, `amount_cents`, `search`, purge: `content` to null with `purged_at`) | none |
 | pending_items | owner | owner | owner | none |
 
 Purging sets `content` to null; the row stays for the audit trail. A trigger
@@ -674,8 +680,9 @@ expense the owner can't see or a private one that isn't theirs.
   first, then the rest" split (`tiered`).
 - **Unreadable** items, and every item when the reader is off, open the same
   form with blank fields and the original beside it.
-- Dismissing an item, or confirming it without "Keep the original", purges its
-  document.
+- Dismissing or confirming an item purges its documents' content. Confirming
+  turns them into references on the expense, shown as "What arrived about this
+  bill" with a Copy search button.
 
 ### The digest
 

@@ -220,6 +220,16 @@ defmodule TabWeb.InboundControllerTest do
     test "bills read between digest days send nothing each, then one digest", ctx do
       ctx.reader.(nil)
       arrive!(ctx.scope, "%PDF-1.4 one")
+
+      # A different bill (another company), not a second copy of the first.
+      Req.Test.stub(Tab.Reader, fn conn ->
+        Req.Test.json(conn, %{
+          "doc_type" => "utility",
+          "merchant" => "Electric",
+          "total_cents" => 6_000
+        })
+      end)
+
       arrive!(ctx.scope, "%PDF-1.4 two")
       refute_enqueued(worker: Mail)
 
@@ -231,6 +241,7 @@ defmodule TabWeb.InboundControllerTest do
       assert_email_sent(fn email ->
         assert email.subject == "2 bills to check on Tab"
         assert email.text_body =~ "Water $30.00"
+        assert email.text_body =~ "Electric $60.00"
       end)
 
       # Not a digest day, or nothing waiting: no digest.

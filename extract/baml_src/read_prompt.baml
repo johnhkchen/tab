@@ -16,6 +16,16 @@ enum DocType {
     Other @description("anything else, or not a bill at all"),
 }
 
+enum DocKind {
+    Bill @description("the bill or statement itself, with its charges"),
+    Notice
+        @description("a message that a bill is ready or how much is due, without the full statement"),
+    AutopayScheduled @description("a message that an automatic payment is scheduled"),
+    Payment @description("a message that a payment was received, approved, or made"),
+    Reminder @description("a reminder that a payment is due or overdue"),
+    Other @description("anything else"),
+}
+
 class BillLine {
     description: string,
     amount: string @description("as printed, like 12.50"),
@@ -23,6 +33,8 @@ class BillLine {
 
 class Bill {
     doc_type: DocType,
+    kind: DocKind,
+    paid_on: string? @description("the date a payment was made or will be made, YYYY-MM-DD"),
     merchant: string? @description("who the bill or receipt is from, like PG&E or Trader Joe's"),
     total: string? @description("the total to pay now, as printed, like 84.20; null if unsure"),
     current_charges: string? @description(
