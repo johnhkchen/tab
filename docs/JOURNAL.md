@@ -118,6 +118,14 @@ this repo), **Gotchas**, **Next**.
 
 ### State of the world
 - Doppler `tab/prd`: `ANTHROPIC_API_KEY` set (name only here).
+- Resend: domain `bills.tab.b28.dev` added (us-east-1) with receiving on;
+  forwarding addresses will live there (maintainer's pick over `tab.b28.dev`
+  and `in.b28.dev`). Resend's Cloudflare auto-config added
+  `resend._domainkey`, `send` and `rsend` CNAMEs (to `forge.rmta.net`), and,
+  once receiving was switched on, `MX bills.tab.b28.dev 10
+  inbound-smtp.us-east-1.amazonaws.com`. b28.dev's Google Workspace MX
+  records and `tab.b28.dev` are untouched. Free plan: received mail counts
+  toward 100/day and 3,000/month.
 - Anthropic: the maintainer's Max plan is linked to a Claude Console
   organization for the monthly API credits (Max 5x $100, Max 20x $200; Claude
   API covered, Claude Code not; no rollover; out of credit means requests stop,
@@ -138,6 +146,9 @@ this repo), **Gotchas**, **Next**.
 - Haiku 5.5 refuses `temperature` (400, "deprecated for this model"); the
   offline tests couldn't see it. A BAML test now checks the request has none.
   `extract` logs the reason when a read fails.
+- Resend's receiving toggle sits on the domain's own page and only adds its
+  MX record once switched on; auto-config adds the sending records first.
+  Read the zone through Cloudflare's API when public DNS lookups flake.
 - `:mimemail.decode/1` calls `:iconv`, which isn't installed; pass
   `encoding: :none` and clean bad UTF-8 ourselves.
 - The `stamp_actor` trigger overwrites `user_id` with the caller, so
