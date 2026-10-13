@@ -638,6 +638,9 @@ expense the owner can't see or a private one that isn't theirs.
   `duplicate_of`, and review warns before saving.
 - **The daily limit:** past `TAB_READS_PER_DAY`, items wait in `waiting` and a
   job reads them the next day.
+- **Out of API credit:** when Anthropic answers "credit balance is too low",
+  the reader answers 503 `paused`, and the item waits like the daily limit,
+  tried again the next day. Nothing is charged.
 
 ### Review
 

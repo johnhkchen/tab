@@ -17,10 +17,11 @@ defmodule Tab.Reader do
 
   @doc """
   `{:ok, fields}`, or `{:error, reason}`: `:off` (no API key on the server),
+  `:paused` (the API account is out of credit until it refills),
   `:unreadable` (the reader couldn't make sense of it), or `:unreachable`
   (the service is down; worth trying again).
   """
-  @spec read(doc) :: {:ok, map} | {:error, :off | :unreadable | :unreachable}
+  @spec read(doc) :: {:ok, map} | {:error, :off | :paused | :unreadable | :unreachable}
   def read(doc) do
     body = %{
       kind: doc.kind,
@@ -45,6 +46,7 @@ defmodule Tab.Reader do
     case Req.post(options) do
       {:ok, %{status: 200, body: %{} = fields}} -> {:ok, fields}
       {:ok, %{status: 503, body: %{"error" => "off"}}} -> {:error, :off}
+      {:ok, %{status: 503, body: %{"error" => "paused"}}} -> {:error, :paused}
       {:ok, %{status: status}} when status in 400..499 -> {:error, :unreadable}
       _ -> {:error, :unreachable}
     end

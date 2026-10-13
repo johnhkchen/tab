@@ -73,6 +73,8 @@ this repo), **Gotchas**, **Next**.
   matching, digest), submission links deferred to phase 6; originals deleted on
   confirm or dismiss unless "Keep the original" is ticked. Open question 1 is
   closed.
+- Out of API credit pauses reading (item waits, retried next day) instead of
+  marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one
   reader call instead of classify-then-extract; the personal inbox tables
   stay out of the per-group audit log; duplicates are turned away rather than
@@ -88,6 +90,14 @@ this repo), **Gotchas**, **Next**.
   updated). Cadence adds `quarterly` beyond the long-form spec's list.
 
 ### State of the world
+- Anthropic: the maintainer's Max plan is linked to a Claude Console
+  organization for the monthly API credits (Max 5x $100, Max 20x $200; Claude
+  API covered, Claude Code not; no rollover; out of credit means requests stop,
+  never a charge). Tab's `ANTHROPIC_API_KEY` comes from that organization.
+  Terms checked: platform.claude.com/docs/en/about-claude/api-credits-for-subscribers
+  and anthropic.com/legal/credit-terms (no transfer or sale of credits; neither
+  page addresses a paid service, so recheck the Commercial Terms before Cloud
+  takes paying customers).
 - GitHub: tag `v0.3.0`, release workflow builds `tab-web:0.3.0` and
   `tab-extract:0.3.0`. Cloudflare: `tab-site` Worker redeployed.
 
@@ -113,8 +123,10 @@ this repo), **Gotchas**, **Next**.
   means B owes A back. An overpayment covers A's next share ahead of time.
 
 ### Next
-- Try a live read: no `ANTHROPIC_API_KEY` exists yet (not in Doppler, not
-  local). Put one in Doppler `tab/prd` and read a real bill before release.
+- Try a live read: create an API key in the linked Console organization, put
+  it in Doppler `tab/prd` as `ANTHROPIC_API_KEY`, and read a real bill before
+  release. Haiku 5.5 is reported at $0.10/$0.50 per million tokens, about
+  $0.0007 a bill, so the credits cover Tab with room to spare.
 - Release v0.4.0: bump the four version places, website docs (bills to check,
   forwarding, and the self-host settings), tag, `site:deploy`.
 - Outside the repo, for Cloud: a Resend receiving domain, the `email.received`

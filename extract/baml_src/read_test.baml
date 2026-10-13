@@ -78,3 +78,10 @@ test "a PDF goes to Claude as a document, a photo as an image" {
     let img_req = ReadPhoto@spec(image.from_base64("aGk=", "image/jpeg")).build_request(client = c);
     assert.contains(img_req.body.to_string(), "\"image\"")
 }
+
+test "an empty credit balance reads as paused, other failures don't" {
+    assert.is_true(
+        out_of_credit("ai.errors.InvalidRequest: Your credit balance is too low to access the Anthropic API."),
+    );
+    assert.is_true(!out_of_credit("ai.errors.Timeout: request timed out"))
+}

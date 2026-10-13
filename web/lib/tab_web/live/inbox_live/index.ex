@@ -208,6 +208,7 @@ defmodule TabWeb.InboxLive.Index do
   end
 
   defp status(%{status: "reading"}), do: "Reading it…"
+  defp status(%{status: "waiting", note: note}) when is_binary(note), do: String.capitalize(note)
   defp status(%{status: "waiting"}), do: "Waiting for tomorrow's reading"
 
   defp status(%{status: "unreadable", note: note}),

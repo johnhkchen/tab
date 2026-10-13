@@ -143,6 +143,21 @@ defmodule Tab.InboxTest do
       assert item.note =~ "off"
     end
 
+    test "out of API credit, the item waits for tomorrow instead of failing", ctx do
+      item = upload!(ctx.priya)
+      reader_says(503, %{"error" => "paused"})
+      :ok = read!(ctx.priya, item)
+
+      item = item(ctx.priya, item)
+      assert item.status == "waiting"
+      assert item.note =~ "paused"
+
+      assert Enum.any?(
+               all_enqueued(worker: ReadWorker, args: %{item_id: item.id}),
+               &(DateTime.compare(&1.scheduled_at, DateTime.utc_now()) == :gt)
+             )
+    end
+
     test "a reader that's down gets more tries, then the item goes to hand entry", ctx do
       item = upload!(ctx.priya)
       Req.Test.stub(Tab.Reader, &Req.Test.transport_error(&1, :econnrefused))

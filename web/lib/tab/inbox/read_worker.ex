@@ -3,6 +3,7 @@ defmodule Tab.Inbox.ReadWorker do
   Reads one pending item with `Tab.Reader`, as the person it belongs to.
 
   Past the day's limit (`TAB_READS_PER_DAY`) the item waits for tomorrow. With
+  the API account out of credit, it waits for tomorrow too. With
   the reader off, or after it fails to make sense of a document, the item is
   marked unreadable: its person types it in by hand beside the original. A
   reader that can't be reached gets a few more tries first.
@@ -30,10 +31,7 @@ defmodule Tab.Inbox.ReadWorker do
     {:ok, today} = Inbox.reads_today(scope)
 
     if today >= limit() do
-      {:ok, _} = Inbox.mark(scope, item, "waiting", "waiting for tomorrow's reading")
-      tomorrow = DateTime.new!(Date.add(Date.utc_today(), 1), ~T[00:05:00])
-      {:ok, _} = Oban.insert(new(job.args, scheduled_at: tomorrow))
-      :ok
+      wait(scope, item, job, "waiting for tomorrow's reading")
     else
       case Inbox.reader_input(scope, item) do
         {:ok, input, email} -> ask(scope, item, input, sender(email), job)
@@ -48,6 +46,10 @@ defmodule Tab.Inbox.ReadWorker do
         {:ok, item} = Inbox.save_reading(scope, item, Proposal.validate(fields), sender)
         Mail.maybe_due_soon(scope, item)
 
+      # Out of API credit: try again tomorrow; it refills each month.
+      {:error, :paused} ->
+        wait(scope, item, job, "bill reading is paused; Tab tries again tomorrow")
+
       {:error, :off} ->
         unreadable(scope, item, "bill reading is off on this server")
 
@@ -59,6 +61,13 @@ defmodule Tab.Inbox.ReadWorker do
           do: unreadable(scope, item, "the reader didn't answer"),
           else: {:error, :unreachable}
     end
+  end
+
+  defp wait(scope, item, job, note) do
+    {:ok, _} = Inbox.mark(scope, item, "waiting", note)
+    tomorrow = DateTime.new!(Date.add(Date.utc_today(), 1), ~T[00:05:00])
+    {:ok, _} = Oban.insert(new(job.args, scheduled_at: tomorrow))
+    :ok
   end
 
   defp unreadable(scope, item, note) do

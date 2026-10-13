@@ -53,10 +53,18 @@ function handle_read(
         return json_response(400, "{\"error\":\"bad_request\"}");
     }
     let r: ReadRequest = parsed;
+    let failure = "";
     let bill = read_bill(r, client = client) catch_all (e) {
-        _ => null
+        _ => {
+            failure = `${e}`;
+            null
+        }
     };
     if (bill == null) {
+        //# Out of API credit: paused until it refills, not unreadable
+        if (out_of_credit(failure)) {
+            return json_response(503, "{\"error\":\"paused\"}");
+        }
         return json_response(422, "{\"error\":\"unreadable\"}");
     }
     let out = baml.json.to_string(to_result(bill)) catch_all (e) {
@@ -146,4 +154,9 @@ function cents(printed: string?) -> int? {
         return null;
     }
     whole * 100 + f
+}
+
+// Anthropic's answer when the account has no credit left.
+function out_of_credit(failure: string) -> bool {
+    failure.to_lower_case().index_of("credit balance is too low") != null
 }
