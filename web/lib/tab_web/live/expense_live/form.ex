@@ -164,7 +164,7 @@ defmodule TabWeb.ExpenseLive.Form do
               name="expense[new_bill]"
               id="expense_new_bill"
               type="checkbox"
-              label={"Treat bills from #{@sender} as a bill, split like this one"}
+              label={"Treat bills from #{@company} as a bill, split like this one"}
               value={@f["new_bill"]}
             />
           </div>
@@ -274,7 +274,7 @@ defmodule TabWeb.ExpenseLive.Form do
         _ -> {nil, template, state}
       end
 
-    sender = item && item.proposal["sender"]
+    names = (item && item.proposal["names"]) || []
 
     {:ok, overrides} = Bills.list_overrides(scope, data.group.id)
 
@@ -282,8 +282,8 @@ defmodule TabWeb.ExpenseLive.Form do
      socket
      |> assign(data: data, expense: expense, errors: %{}, types: @types, rest_types: @rest_types)
      |> assign(template: template, overrides: overrides, suggesting: expense == nil, why: nil)
-     |> assign(item: item, sender: Tab.Inbox.Email.domain(sender) || sender)
-     |> assign(offer_bill: item != nil and template == nil and is_binary(sender))
+     |> assign(item: item, names: names, company: List.first(names))
+     |> assign(offer_bill: item != nil and template == nil and names != [])
      |> assign(state)
      |> assign(page_title: if(expense, do: "Edit expense", else: "Add an expense"))
      |> suggest()
@@ -510,11 +510,11 @@ defmodule TabWeb.ExpenseLive.Form do
 
   defp persist(
          scope,
-         %{expense: nil, item: %{} = item, data: data, template: t, f: f, sender: sender},
+         %{expense: nil, item: %{} = item, data: data, template: t, f: f, names: names},
          attrs
        ) do
     Inbox.confirm(scope, item, data.group.id, Map.put(attrs, :template_id, t && t.id),
-      sender: sender,
+      names: names,
       new_bill: f["new_bill"] == "true" and f["private"] != "true"
     )
   end

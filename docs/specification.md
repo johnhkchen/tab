@@ -525,7 +525,10 @@ reader switched off.
 | What phase 4 covers | Photo and PDF upload, forwarded email with a setup guide, the review list, matching bills to phase 3 templates, and the digest. Submission links for people without an account wait for the Cloud edition, since their cost lands on the issuer's allowance. Decided 2026-10-13. |
 | The original document | Deleted once its bill is saved or dropped, always: Tab doesn't store bills' sensitive originals. What stays with the expense is a reference anyone who can see the expense can read: what it was, who sent it, the subject, the date, the amount, and a search line (Gmail's syntax, readable anywhere) for finding it in the mailbox it came from. Decided 2026-10-13, replacing "Keep the original". |
 | One bill, several documents | A pending item is one bill and holds every document about it: the statement, a "bill is ready" email, autopay scheduled, payment made, a reminder. After reading, a document joins an open item for the same bill, else goes with an expense already saved for it (as a reference; no new item), else becomes its own item. The same bill: the same company (sender's domain or merchant, one name holding the other) and the same amount within 45 days, or the same company and due date, or the same amount and due date whatever the names (a utility's email and its PDF often name it differently). Decided 2026-10-13. |
-| Forwarded by hand | The sender, subject, and date come from the forwarded block (Gmail, Apple Mail, Outlook), not the forwarder's headers. The same email forwarded twice is caught by sender, subject, and date, since its bytes differ. |
+| Forwarded by hand | The sender, subject, and date come from the innermost forwarded block (Gmail, Apple Mail, Outlook), not the forwarder's headers, so a landlord's forward forwarded again still names the company. The same email forwarded twice is caught by sender, subject, and date, since its bytes differ. |
+| Company names | Each bill on the Bills page keeps aliases: other names on its bills and the domains they come from ("SFPUC", "San Francisco Water Power Sewer", "sfwater.org"). Matching compares every name seen for a bill to be checked (its merchants and senders' domains, collected across its documents) with a bill's name and aliases. Saving a bill adds the names it came under to the matched bill's aliases; making a new bill from it starts them there; putting two together by hand adds the other's names. Anyone in the group can edit them. Decided 2026-10-13. |
+| Forwarders | Each group keeps a list of addresses that forward bills for several companies (a landlord, a property manager). Mail from them never counts as the company. When one address has sent bills naming two different companies, the bill to check offers to add it. Decided 2026-10-13. |
+| Fixing grouping by hand | A bill to check offers "Same bill as another?" to put it together with another open one, and each document offers "Not part of this bill" to split it out into a bill of its own. Each document keeps its own reading, so both bills are worked out again from their documents. Decided 2026-10-13. |
 | A balance carried from earlier bills | The form fills in this period's charges only (`period_cents`: the printed current charges, else total minus the carried balance), so a bill already logged never counts twice. A "Carried over from earlier bills" field, 0 by default, adds to it; when the bill shows a carried balance, the form offers it in one tap. It also takes late fees and other surprises. Decided 2026-10-13. |
 | A past-due bill | Flagged "Past due" in Bills to check, on the bill, and on the form, with a note to check autopay. No extra email. Decided 2026-10-13. |
 | Late bills | A regular bill (not `irregular`) shows "Late" on the Bills page when nothing has been logged a week past one cadence after the last one, and the digest lists it for whoever usually pays it, or everyone in the group when nobody's set. Needs no reading. Decided 2026-10-13. |
@@ -578,9 +581,11 @@ reader returned, validated), `due_on`, `template_id` (a suggested match),
 `group_id` (suggested), `expense_id` (set on confirm), `duplicate_of` (a likely
 duplicate expense, for the warning), `read_at`, `created_at`.
 
-**recurring_templates** gains `sender` (optional, lowercase domain or address,
-like `pge.com`), set when someone confirms a bill from that sender against the
-template.
+**recurring_templates** gains `aliases` (text array, at most 30): other names
+and sender domains the bill comes under.
+
+**bill_forwarders**: `id`, `group_id`, `address` (lowercase), `created_by`,
+`deleted_at`. Members read, add, and remove (by `deleted_at`); audited.
 
 **profiles** gains `digest_days` (int array, default `{10,25}`, each 1 to 28).
 
@@ -597,6 +602,7 @@ is audited like any other.
 | inbound_messages | owner | none (webhook only) | none | none |
 | documents | owner; members of the expense's group once it's a reference for an expense | owner, on their own item | owner (`item_id` to their own item, `expense_id`, `role`, `amount_cents`, `search`, purge: `content` to null with `purged_at`) | none |
 | pending_items | owner | owner | owner | none |
+| bill_forwarders | members | members | members (`deleted_at` only) | none |
 
 Purging sets `content` to null; the row stays for the audit trail. A trigger
 refuses setting `content` back once purged, and refuses `expense_id` on an

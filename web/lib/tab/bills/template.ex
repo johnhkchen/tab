@@ -21,8 +21,8 @@ defmodule Tab.Bills.Template do
     field :autopay_day, :integer
     field :last_amount_cents, :integer
     field :last_logged_on, :date
-    # Whose bills these are, learned when someone confirms a read bill (phase 4).
-    field :sender, :string
+    # Other names this bill goes by, and the addresses it comes from (phase 4).
+    field :aliases, {:array, :string}, default: []
     field :created_by, :binary_id
     field :deleted_at, :utc_datetime
 
@@ -30,6 +30,23 @@ defmodule Tab.Bills.Template do
   end
 
   def cadences, do: @cadences
+
+  @doc ~S"""
+  Aliases tidied: trimmed, blanks and repeats dropped (ignoring case), each
+  at most 120 characters, at most 30.
+
+      iex> Tab.Bills.Template.clean_aliases([" SFPUC ", "sfpuc", "", "sfwater.org"])
+      ["SFPUC", "sfwater.org"]
+  """
+  def clean_aliases(nil), do: []
+
+  def clean_aliases(aliases) do
+    aliases
+    |> Enum.map(&(&1 |> to_string() |> String.trim() |> String.slice(0, 120)))
+    |> Enum.reject(&(&1 == ""))
+    |> Enum.uniq_by(&String.downcase/1)
+    |> Enum.take(30)
+  end
 
   def changeset(template, attrs) do
     template
@@ -41,8 +58,10 @@ defmodule Tab.Bills.Template do
       :stability,
       :default_payer,
       :default_split,
-      :autopay_day
+      :autopay_day,
+      :aliases
     ])
+    |> update_change(:aliases, &clean_aliases/1)
     |> validate_required([:name, :cadence, :stability])
     |> update_change(:name, &String.trim/1)
     |> validate_length(:name, min: 1, max: 120)

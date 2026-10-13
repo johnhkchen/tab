@@ -126,15 +126,17 @@ defmodule TabWeb.InboxPagesTest do
     item = read_bill!(ctx.scope, @electric)
 
     Repo.update_all(Item,
-      set: [proposal: Map.put(Repo.get!(Item, item.id).proposal, "sender", "billing@pge.com")]
+      set: [
+        proposal: Map.put(Repo.get!(Item, item.id).proposal, "names", ["PG&E", "pge.com"])
+      ]
     )
 
     {:ok, lv, html} = live(conn, ~p"/groups/#{ctx.group}/expenses/new?item=#{item.id}")
-    assert html =~ "Treat bills from pge.com as a bill"
+    assert html =~ "Treat bills from PG&amp;E as a bill"
 
     lv |> form("#expense_form", expense: %{new_bill: "true"}) |> render_submit()
     {:ok, [t]} = Bills.list_templates(ctx.scope, ctx.group.id)
-    assert {t.name, t.sender} == {"PG&E", "pge.com"}
+    assert {t.name, t.aliases} == {"PG&E", ["pge.com"]}
   end
 
   test "a past-due bill with a carried balance fills in this period, and the rest is one tap away",
@@ -254,6 +256,59 @@ defmodule TabWeb.InboxPagesTest do
     assert html =~ "Autopay scheduled"
     assert html =~ "Copy search"
     assert html =~ "from:(noreply@sfwater.org)"
+  end
+
+  test "the Bills page keeps aliases and forwarders", %{conn: conn} = ctx do
+    {:ok, lv, _} = live(conn, ~p"/groups/#{ctx.group}/bills")
+
+    lv
+    |> form("#bill_form", bill: %{name: "Water", aliases: "SFPUC, sfwater.org, , sfpuc"})
+    |> render_submit()
+
+    {:ok, [t]} = Bills.list_templates(ctx.scope, ctx.group.id)
+    assert t.aliases == ["SFPUC", "sfwater.org"]
+    assert render(lv) =~ "Also called SFPUC, sfwater.org"
+
+    html = lv |> form("#forwarder_form", address: "Landlord@Rentals.test") |> render_submit()
+    assert html =~ "landlord@rentals.test"
+
+    html = lv |> form("#forwarder_form", address: "nope") |> render_submit()
+    assert html =~ "type an email address"
+
+    html = lv |> element("#forwarders button", "Remove") |> render_click()
+    refute html =~ "landlord@rentals.test"
+  end
+
+  test "put two bills together, then split one back out, from the bill page",
+       %{conn: conn} = ctx do
+    a =
+      read_bill!(
+        ctx.scope,
+        %{@electric | "merchant" => "SFPUC", "total_cents" => 5_000},
+        "%PDF-1.4 a"
+      )
+
+    b =
+      read_bill!(
+        ctx.scope,
+        %{@electric | "merchant" => "Hetch Hetchy", "total_cents" => 5_100},
+        "%PDF-1.4 b"
+      )
+
+    {:ok, lv, html} = live(conn, ~p"/inbox/#{b}")
+    assert html =~ "Same bill as another?"
+
+    {:ok, lv, html} =
+      lv |> form("#join_form", target: a.id) |> render_submit() |> follow_redirect(conn)
+
+    assert html =~ "Put together."
+    assert html =~ "Not part of this bill"
+
+    {:ok, item} = Inbox.get_item(ctx.scope, a.id)
+    second = List.last(item.documents)
+    html = lv |> element("#doc-#{second.id} button", "Not part of this bill") |> render_click()
+    assert html =~ "its own bill to check"
+    assert {:ok, [_, _]} = Inbox.list_items(ctx.scope)
   end
 
   test "dropping a bill deletes it from the list", %{conn: conn} = ctx do

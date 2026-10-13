@@ -12,6 +12,7 @@ defmodule TabWeb.Documents do
 
   attr :documents, :list, required: true
   attr :id, :string, required: true
+  attr :split, :boolean, default: false, doc: "offer \"Not part of this bill\" on each"
 
   def list(assigns) do
     ~H"""
@@ -27,6 +28,15 @@ defmodule TabWeb.Documents do
         <span class="block text-ink-soft">
           {Enum.join(Enum.reject([d.sender, d.subject, sent(d)], &is_nil/1), " · ")}
         </span>
+        <button
+          :if={@split}
+          type="button"
+          phx-click="split"
+          phx-value-id={d.id}
+          class="mt-1 text-xs underline"
+        >
+          Not part of this bill
+        </button>
         <span :if={d.search && d.purged_at} class="mt-1 flex flex-wrap items-center gap-2">
           <input
             id={"search-#{d.id}"}

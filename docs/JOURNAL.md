@@ -127,6 +127,18 @@ this repo), **Gotchas**, **Next**.
   since the email says "SFPUC (San Francisco Water, Power and Sewer)" and the
   PDF "San Francisco Water Power Sewer". Recology really does send two
   emails per payment (scheduled, then approved).
+- **Aliases, forwarders, and fixing grouping** (maintainer's calls, all the
+  recommended options, before v0.4.0): aliases live on each bill
+  (`recurring_templates.aliases`, replacing the unreleased `sender`), learned
+  on save and on manual joins, editable on the Bills page; `bill_forwarders`
+  per group, suggested when one address sends bills naming two companies;
+  "Same bill as another?" and "Not part of this bill" on a bill to check,
+  with each document's own `reading` so both bills are rebuilt. The email
+  parser now reads the innermost forwarded block (a landlord's forward,
+  forwarded again). Dev and test databases rebuilt from scratch for the
+  changed unreleased migration. Re-run on the maintainer's real documents in
+  dev: SFPUC email and PDF, and Recology's two emails and PDF, each became
+  one bill with every name collected; the repeat Recology forward was caught.
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one

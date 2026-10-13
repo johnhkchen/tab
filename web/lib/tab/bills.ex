@@ -13,7 +13,7 @@ defmodule Tab.Bills do
   import Tab.Groups, only: [found: 1, now: 0, set: 3, touched: 1, update: 1]
 
   alias Tab.Accounts.Scope
-  alias Tab.Bills.{Dates, Override, Suggest, Template}
+  alias Tab.Bills.{Dates, Forwarder, Override, Suggest, Template}
   alias Tab.Repo
 
   ## Recurring bills
@@ -73,7 +73,7 @@ defmodule Tab.Bills do
   next bill from them matches. A bill with that name already in the group is
   left alone.
   """
-  def create_template_from(%Scope{} = scope, %Tab.Ledger.Expense{} = e, sender) do
+  def create_template_from(%Scope{} = scope, %Tab.Ledger.Expense{} = e, names) do
     as_user(scope, fn ->
       taken? =
         Repo.exists?(
@@ -94,9 +94,13 @@ defmodule Tab.Bills do
                  name: e.description,
                  category_id: e.category_id,
                  default_payer: e.paid_by,
-                 default_split: split
+                 default_split: split,
+                 aliases:
+                   Enum.reject(
+                     names || [],
+                     &(String.downcase(&1) == String.downcase(e.description))
+                   )
                })
-               |> Ecto.Changeset.put_change(:sender, sender)
                |> Repo.insert() do
           from(x in Tab.Ledger.Expense, where: x.id == ^e.id)
           |> Repo.update_all(set: [template_id: t.id])
@@ -105,6 +109,66 @@ defmodule Tab.Bills do
         end
       end
     end)
+  end
+
+  @doc """
+  Adds names to a bill's aliases, leaving out any it already answers to
+  (its name, or an alias, ignoring case). Tab calls this when someone saves
+  a read bill matched to it or puts two bills together by hand.
+  """
+  def add_aliases(%Scope{} = scope, template_id, names) do
+    as_user(scope, fn ->
+      with {:ok, t} <- found(Repo.get(Template, template_id)) do
+        known = MapSet.new([t.name | t.aliases], &String.downcase/1)
+        new = Enum.reject(names, &(MapSet.member?(known, String.downcase(&1)) or &1 == ""))
+
+        if new == [],
+          do: {:ok, t},
+          else:
+            t
+            |> Ecto.Changeset.change(aliases: Template.clean_aliases(t.aliases ++ new))
+            |> update()
+      end
+    end)
+  end
+
+  ## Forwarders
+
+  @doc "Addresses in the group that forward bills for several companies."
+  def list_forwarders(%Scope{} = scope, group_id) do
+    as_user(scope, fn ->
+      {:ok,
+       Repo.all(
+         from f in Forwarder,
+           where: f.group_id == ^group_id and is_nil(f.deleted_at),
+           order_by: f.address
+       )}
+    end)
+  end
+
+  @doc "Marks an address as one that forwards bills, not a company."
+  def add_forwarder(%Scope{} = scope, group_id, address) do
+    address = address |> to_string() |> String.trim() |> String.downcase()
+
+    as_user(scope, fn ->
+      if Repo.exists?(
+           from f in Forwarder,
+             where: f.group_id == ^group_id and f.address == ^address and is_nil(f.deleted_at)
+         ) do
+        {:ok, :already}
+      else
+        %Forwarder{group_id: group_id}
+        |> Ecto.Changeset.change(address: address)
+        |> Ecto.Changeset.validate_format(:address, ~r/^[^@\s]+@[^@\s]+$/,
+          message: "type an email address, like landlord@example.com"
+        )
+        |> Repo.insert()
+      end
+    end)
+  end
+
+  def remove_forwarder(%Scope{} = scope, id) do
+    as_user(scope, fn -> touched(set(Forwarder, id, deleted_at: now())) end)
   end
 
   def update_template(%Scope{} = scope, id, attrs) do

@@ -266,12 +266,10 @@ defmodule Tab.InboxTest do
   end
 
   describe "matching bills" do
-    test "a template by name, then by the sender it learned", ctx do
+    test "a bill learns the names its bills come under, and matches by them", ctx do
       {:ok, electric} =
         Bills.create_template(ctx.priya, ctx.house.id, %{
           name: "PG&E",
-          cadence: "monthly",
-          stability: "variable",
           default_split: Suggest.equal([{:user, ctx.priya.user.id}, {:user, ctx.sam.user.id}])
         })
 
@@ -294,42 +292,35 @@ defmodule Tab.InboxTest do
             split: electric.default_split,
             template_id: electric.id
           },
-          sender: "pge.com"
+          names: ["PG&E", "pge.com"]
         )
 
-      assert Repo.get!(Tab.Bills.Template, electric.id).sender == "pge.com"
+      # Its own name isn't repeated as an alias.
+      assert Repo.get!(Tab.Bills.Template, electric.id).aliases == ["pge.com"]
 
-      # Next month the name on the bill is different; the sender still matches.
+      # Next month the bill says a different name; the sender still matches.
       second = upload!(ctx.priya, "%PDF-1.4 next month")
 
-      reader_says(%{
+      next = %{
         @utility
         | "merchant" => "Pacific Gas and Electric",
           "total_cents" => 9_130,
           "date" => "2026-11-03",
           "due_on" => "2026-11-24"
-      })
-
-      :ok = read!(ctx.priya, second)
+      }
 
       {:ok, _} =
         Inbox.save_reading(
           ctx.priya,
           item(ctx.priya, second),
-          Inbox.Proposal.validate(%{
-            @utility
-            | "merchant" => "Pacific Gas and Electric",
-              "total_cents" => 9_130,
-              "date" => "2026-11-03",
-              "due_on" => "2026-11-24"
-          }),
+          Inbox.Proposal.validate(next),
           "billing@mail.pge.com"
         )
 
       assert item(ctx.priya, second).template_id == electric.id
     end
 
-    test "a first bill from a sender can become a bill", ctx do
+    test "a first bill from a company can become a bill, with its names", ctx do
       item = upload!(ctx.priya)
       reader_says(@utility)
       :ok = read!(ctx.priya, item)
@@ -346,13 +337,179 @@ defmodule Tab.InboxTest do
             paid_by: ctx.priya.user.id,
             split: Suggest.equal([{:user, ctx.priya.user.id}, {:user, ctx.sam.user.id}])
           },
-          sender: "pge.com",
+          names: ["PG&E", "pge.com"],
           new_bill: true
         )
 
       {:ok, [template]} = Bills.list_templates(ctx.priya, ctx.house.id)
-      assert {template.name, template.sender} == {"Electric", "pge.com"}
+      assert {template.name, template.aliases} == {"Electric", ["PG&E", "pge.com"]}
       assert Repo.get!(Expense, expense.id).template_id == template.id
+    end
+
+    test "an alias typed on the Bills page puts differently named bills together", ctx do
+      {:ok, _} =
+        Bills.create_template(ctx.priya, ctx.house.id, %{
+          name: "Water",
+          aliases: ["SFPUC", "San Francisco Water Power Sewer"]
+        })
+
+      a = upload!(ctx.priya, "%PDF-1.4 a")
+
+      reader_says(%{
+        "doc_type" => "utility",
+        "kind" => "notice",
+        "merchant" => "SFPUC",
+        "total_cents" => 5_000
+      })
+
+      :ok = read!(ctx.priya, a)
+
+      b = upload!(ctx.priya, "%PDF-1.4 b")
+
+      reader_says(%{
+        "doc_type" => "utility",
+        "kind" => "bill",
+        "merchant" => "San Francisco Water Power Sewer",
+        "total_cents" => 5_000
+      })
+
+      :ok = read!(ctx.priya, b)
+
+      assert item(ctx.priya, b).status == "merged"
+    end
+  end
+
+  describe "forwarders" do
+    defp landlord_mail(subject, body) do
+      "From: Landlord <landlord@rentals.test>\r\nTo: elm@bills.test\r\nSubject: #{subject}\r\nContent-Type: text/plain\r\n\r\n#{body}\r\n"
+    end
+
+    defp mail_in!(scope, group_id, raw, fields) do
+      {:ok, item} =
+        Inbox.add(scope, %{
+          kind: "email",
+          content_type: "message/rfc822",
+          data: raw,
+          source: "email",
+          group_id: group_id
+        })
+
+      reader_says(fields)
+      :ok = read!(scope, item)
+      item(scope, item)
+    end
+
+    test "Tab suggests a forwarder, and once added, its address isn't the company", ctx do
+      water = %{
+        "doc_type" => "utility",
+        "kind" => "bill",
+        "merchant" => "City Water",
+        "total_cents" => 4_000
+      }
+
+      power = %{
+        "doc_type" => "utility",
+        "kind" => "bill",
+        "merchant" => "City Power",
+        "total_cents" => 9_000
+      }
+
+      w = mail_in!(ctx.priya, ctx.house.id, landlord_mail("Water", "Water $40"), water)
+      refute w.proposal["suggest_forwarder"]
+      assert "rentals.test" in w.proposal["names"]
+
+      p = mail_in!(ctx.priya, ctx.house.id, landlord_mail("Power", "Power $90"), power)
+      assert p.proposal["suggest_forwarder"] == "landlord@rentals.test"
+
+      {:ok, _} = Bills.add_forwarder(ctx.priya, ctx.house.id, "Landlord@Rentals.test")
+      {:ok, [f]} = Bills.list_forwarders(ctx.sam, ctx.house.id)
+      assert f.address == "landlord@rentals.test"
+
+      gas =
+        mail_in!(ctx.priya, ctx.house.id, landlord_mail("Gas", "Gas $25"), %{
+          power
+          | "merchant" => "City Gas",
+            "total_cents" => 2_500
+        })
+
+      assert gas.proposal["names"] == ["City Gas"]
+      refute gas.proposal["suggest_forwarder"]
+    end
+
+    test "only people in the group can add one, and a bad address is refused", ctx do
+      assert {:error, _} = Bills.add_forwarder(user_scope_fixture(), ctx.house.id, "x@y.test")
+
+      assert {:error, %Ecto.Changeset{}} =
+               Bills.add_forwarder(ctx.priya, ctx.house.id, "not an address")
+    end
+  end
+
+  describe "fixing grouping by hand" do
+    setup ctx do
+      a = upload!(ctx.priya, "%PDF-1.4 a")
+
+      reader_says(%{
+        "doc_type" => "utility",
+        "kind" => "notice",
+        "merchant" => "SFPUC",
+        "total_cents" => 5_000,
+        "due_on" => "2026-10-08"
+      })
+
+      :ok = read!(ctx.priya, a)
+
+      b = upload!(ctx.priya, "%PDF-1.4 b")
+
+      reader_says(%{
+        "doc_type" => "utility",
+        "kind" => "bill",
+        "merchant" => "Hetch Hetchy Water",
+        "total_cents" => 5_100,
+        "period_start" => "2026-09-01",
+        "period_end" => "2026-09-30"
+      })
+
+      :ok = read!(ctx.priya, b)
+      %{a: item(ctx.priya, a), b: item(ctx.priya, b)}
+    end
+
+    test "put together: one bill, details from both, and a matched bill learns the names", ctx do
+      {:ok, water} = Bills.create_template(ctx.priya, ctx.house.id, %{name: "SFPUC"})
+      Repo.update_all(from(i in Item, where: i.id == ^ctx.a.id), set: [template_id: water.id])
+      assert ctx.b.status == "ready"
+
+      {:ok, target} = Inbox.join(ctx.priya, ctx.b.id, ctx.a.id)
+      assert target.id == ctx.a.id
+      {:ok, [item]} = Inbox.list_items(ctx.priya)
+      assert item.id == ctx.a.id
+      assert length(item.documents) == 2
+      # The full bill's fields win; the notice's due date stays.
+      assert {item.proposal["kind"], item.proposal["total_cents"], item.proposal["due_on"],
+              item.proposal["period_start"]} ==
+               {"bill", 5_100, "2026-10-08", "2026-09-01"}
+
+      assert "Hetch Hetchy Water" in Repo.get!(Tab.Bills.Template, water.id).aliases
+      assert {:error, :not_found} = Inbox.join(ctx.sam, ctx.a.id, ctx.a.id)
+    end
+
+    test "split apart: the document becomes its own bill, and both are worked out again", ctx do
+      {:ok, _} = Inbox.join(ctx.priya, ctx.b.id, ctx.a.id)
+      {:ok, item} = Inbox.get_item(ctx.priya, ctx.a.id)
+      pdf_b = Enum.find(item.documents, &(&1.role == "bill"))
+
+      {:ok, new} = Inbox.split(ctx.priya, ctx.a.id, pdf_b.id)
+      {:ok, a} = Inbox.get_item(ctx.priya, ctx.a.id)
+      {:ok, new} = Inbox.get_item(ctx.priya, new.id)
+
+      assert {a.proposal["kind"], a.proposal["total_cents"], length(a.documents)} ==
+               {"notice", 5_000, 1}
+
+      assert {new.status, new.proposal["total_cents"], length(new.documents)} ==
+               {"ready", 5_100, 1}
+
+      # A bill's last document can't be split out; someone else can't split it.
+      assert {:error, :only_document} = Inbox.split(ctx.priya, a.id, hd(a.documents).id)
+      assert {:error, :not_found} = Inbox.split(ctx.sam, new.id, hd(new.documents).id)
     end
   end
 

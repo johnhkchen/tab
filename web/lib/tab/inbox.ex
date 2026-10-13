@@ -342,8 +342,10 @@ defmodule Tab.Inbox do
   pass to `Tab.Ledger.create_expense/3`. The item's originals are deleted;
   their references stay with the expense. Options:
 
-    * `sender: "pge.com"` remembers the sender on the expense's template,
-    * `new_bill: true` makes a template from the expense (with the sender).
+    * `names: ["SFPUC", "sfwater.org"]` adds the names the bill came under
+      to the expense's bill (its aliases), so Tab recognizes them next time,
+    * `new_bill: true` makes a bill on the Bills page from the expense, with
+      those names as its aliases.
 
   All of it happens together or not at all.
   """
@@ -386,23 +388,12 @@ defmodule Tab.Inbox do
   end
 
   defp remember(scope, %Expense{template_id: tid} = expense, opts) when is_binary(tid) do
-    case opts[:sender] do
-      sender when is_binary(sender) ->
-        as_user(scope, fn ->
-          from(t in Template, where: t.id == ^tid and is_nil(t.sender))
-          |> Repo.update_all(set: [sender: sender, updated_at: now()])
-
-          {:ok, expense}
-        end)
-
-      _ ->
-        {:ok, expense}
-    end
+    with {:ok, _} <- Tab.Bills.add_aliases(scope, tid, opts[:names] || []), do: {:ok, expense}
   end
 
   defp remember(scope, expense, opts) do
     if opts[:new_bill] do
-      Tab.Bills.create_template_from(scope, expense, opts[:sender])
+      Tab.Bills.create_template_from(scope, expense, opts[:names] || [])
     else
       {:ok, expense}
     end
@@ -485,33 +476,58 @@ defmodule Tab.Inbox do
     as_user(scope, fn ->
       with {:ok, item} <-
              found(Repo.one(from i in Item, where: i.id == ^item.id, preload: :documents)) do
-        proposal = Map.put(proposal, "sender", sender)
+        forwarders = forwarders(item.group_id)
+
+        proposal =
+          Map.merge(proposal, %{
+            "sender" => sender,
+            "names" => names(proposal, sender, forwarders)
+          })
+
         doc = List.last(item.documents)
         label(doc, proposal)
-        key = bill_key(proposal, item.group_id, doc)
+        template = match_template(proposal["names"], item.group_id)
+        key = bill_key(proposal, item.group_id, doc, template && template.id)
 
         cond do
           other = same_open_item(item, key) -> join_item(item, doc, other, proposal)
           expense = same_expense(key) -> join_expense(item, doc, expense)
-          true -> ready(item, proposal, sender)
+          true -> ready(item, proposal, template, forwarders)
         end
       end
     end)
+  end
+
+  # The forwarding addresses of the group, or of all the person's groups.
+  defp forwarders(group_id) do
+    q = from f in Tab.Bills.Forwarder, where: is_nil(f.deleted_at), select: f.address
+    q = if group_id, do: where(q, [f], f.group_id == ^group_id), else: q
+    q |> Repo.all() |> MapSet.new()
+  end
+
+  # The names a document gave its company: the merchant it names, and the
+  # sender's domain unless the sender only forwards bills.
+  defp names(p, sender, forwarders) do
+    domain = if sender && !MapSet.member?(forwarders, sender), do: Email.domain(sender)
+    Enum.reject([p["merchant"], domain], &is_nil/1)
   end
 
   defp label(nil, _), do: :ok
 
   defp label(doc, p) do
     from(d in Document, where: d.id == ^doc.id)
-    |> Repo.update_all(set: [role: p["kind"], amount_cents: amount(p), updated_at: now()])
+    |> Repo.update_all(
+      set: [role: p["kind"], amount_cents: amount(p), reading: p, updated_at: now()]
+    )
   end
 
   defp amount(p), do: p["period_cents"] || p["total_cents"]
 
   # What identifies a bill: who it's from, how much, and when.
-  defp bill_key(p, group_id, doc) do
+  defp bill_key(p, group_id, doc, template_id) do
     %{
-      companies: companies(p["sender"], p["merchant"]),
+      companies: companies(p["names"] || []),
+      template_id: template_id,
       amount: amount(p),
       due_on: p["due_on"],
       on:
@@ -522,25 +538,34 @@ defmodule Tab.Inbox do
   end
 
   @doc ~S"""
-  A company's names for matching: the sender's domain without its ending,
-  and the merchant name squeezed to letters and digits.
+  Names squeezed for matching: a domain or address becomes the domain's main
+  part; anything else keeps only its letters and digits.
 
-      iex> Tab.Inbox.companies("donotreply@billpay.pge.com", "PG&E")
+      iex> Tab.Inbox.companies(["PG&E", "billpay.pge.com"])
       ["pge"]
-      iex> Tab.Inbox.companies("noreply@recology.com", "Recology Sunset Scavenger")
-      ["recology", "recologysunsetscavenger"]
+      iex> Tab.Inbox.companies(["Recology Sunset Scavenger", "noreply@recology.com"])
+      ["recologysunsetscavenger", "recology"]
   """
-  def companies(sender, merchant) do
-    domain =
-      case Email.domain(sender) do
-        nil -> nil
-        d -> d |> String.split(".") |> hd()
-      end
-
-    [domain, squeeze(merchant)] |> Enum.reject(&(&1 in [nil, ""])) |> Enum.uniq()
+  def companies(names) do
+    names
+    |> Enum.map(&company/1)
+    |> Enum.reject(&(&1 in [nil, ""]))
+    |> Enum.uniq()
   end
 
-  defp squeeze(nil), do: nil
+  defp company(name) do
+    cond do
+      String.contains?(name, "@") ->
+        name |> Email.domain() |> company()
+
+      Regex.match?(~r/^[a-z0-9-]+(\.[a-z0-9-]+)+$/i, name) ->
+        name |> String.downcase() |> Email.domain_of_host() |> String.split(".") |> hd()
+
+      true ->
+        squeeze(name)
+    end
+  end
+
   defp squeeze(name), do: name |> String.downcase() |> String.replace(~r/[^a-z0-9]/, "")
 
   # The same company when one name holds the other: "recology" and
@@ -554,11 +579,15 @@ defmodule Tab.Inbox do
     end)
   end
 
-  # Same company and amount within 45 days, or same company and due date.
-  # The same amount due the same day is the same bill even when the names
-  # differ ("SFPUC" in its email, "San Francisco Water Power Sewer" on its PDF).
+  # Same company (or matched to the same bill) and amount within 45 days, or
+  # same company and due date. The same amount due the same day is the same
+  # bill even when the names differ.
   defp same_bill?(key, other) do
-    (same_company?(key.companies, other.companies) and
+    company? =
+      (key.template_id != nil and key.template_id == other.template_id) or
+        same_company?(key.companies, other.companies)
+
+    (company? and
        ((key.amount != nil and key.amount == other.amount and
            abs(Date.diff(key.on, other.on)) <= 45) or
           (key.due_on != nil and key.due_on == other.due_on))) or
@@ -578,11 +607,13 @@ defmodule Tab.Inbox do
     end)
     |> Repo.all()
     |> Enum.find(fn other ->
-      same_bill?(key, bill_key(other.proposal, other.group_id, List.first(other.documents)))
+      same_bill?(
+        key,
+        bill_key(other.proposal, other.group_id, List.first(other.documents), other.template_id)
+      )
     end)
   end
 
-  defp same_expense(%{companies: []}), do: nil
   defp same_expense(%{amount: nil}), do: nil
 
   defp same_expense(key) do
@@ -593,17 +624,16 @@ defmodule Tab.Inbox do
         where:
           is_nil(e.deleted_at) and e.visibility == "shared" and e.amount_cents == ^key.amount and
             e.date >= ^Date.add(key.on, -45) and e.date <= ^Date.add(key.on, 45),
-        select: {e, t.sender}
+        select: {e, t}
 
     q = if key.group_id, do: where(q, [e], e.group_id == ^key.group_id), else: q
 
     q
     |> Repo.all()
-    |> Enum.find_value(fn {e, sender} ->
-      names =
-        Enum.reject([sender && hd(String.split(sender, ".")), squeeze(e.description)], &is_nil/1)
-
-      if same_company?(names, key.companies), do: e
+    |> Enum.find_value(fn {e, t} ->
+      same_template? = key.template_id != nil and e.template_id == key.template_id
+      names = [e.description | if(t, do: [t.name | t.aliases], else: [])]
+      if same_template? or same_company?(companies(names), key.companies), do: e
     end)
   end
 
@@ -613,18 +643,19 @@ defmodule Tab.Inbox do
     from(d in Document, where: d.id == ^doc.id)
     |> Repo.update_all(set: [item_id: other.id, updated_at: now()])
 
-    merged = merge(other.proposal, p)
-
-    {:ok, _} =
-      other
-      |> Ecto.Changeset.change(
-        proposal: merged,
-        status: if(other.status == "unreadable", do: "ready", else: other.status),
-        due_on: other.due_on || (merged["due_on"] && Date.from_iso8601!(merged["due_on"]))
-      )
-      |> Repo.update()
-
+    {:ok, _} = update_proposal(other, merge(other.proposal, p))
     close(item, "joined another bill")
+  end
+
+  defp update_proposal(item, merged) do
+    item
+    |> Ecto.Changeset.change(
+      proposal: merged,
+      status: if(item.status == "unreadable" and merged["kind"], do: "ready", else: item.status),
+      due_on: merged["due_on"] && Date.from_iso8601!(merged["due_on"]),
+      doc_type: merged["doc_type"] || item.doc_type
+    )
+    |> Repo.update()
   end
 
   # This document is about a bill someone already saved: it goes with that
@@ -642,7 +673,7 @@ defmodule Tab.Inbox do
   end
 
   # Fields the item doesn't have yet come from the new document; a full
-  # bill's fields win; past due sticks once any document says so.
+  # bill's fields win; past due sticks once any document says so; names add up.
   @doc false
   def merge(old, new) do
     base =
@@ -653,12 +684,17 @@ defmodule Tab.Inbox do
     base
     |> Map.put("past_due", old["past_due"] == true or new["past_due"] == true)
     |> Map.put("kind", if(new["kind"] == "bill", do: "bill", else: old["kind"] || new["kind"]))
+    |> Map.put("names", Enum.uniq((old["names"] || []) ++ (new["names"] || [])))
   end
 
   defp reject_nil(map), do: map |> Enum.reject(fn {_, v} -> is_nil(v) end) |> Map.new()
 
-  defp ready(item, proposal, sender) do
-    template = match_template(proposal["merchant"], sender, item.group_id)
+  defp ready(item, proposal, template, forwarders) do
+    proposal =
+      case forwarder_hint(proposal, forwarders) do
+        nil -> proposal
+        sender -> Map.put(proposal, "suggest_forwarder", sender)
+      end
 
     item
     |> Ecto.Changeset.change(
@@ -672,6 +708,120 @@ defmodule Tab.Inbox do
       read_at: now()
     )
     |> Repo.update()
+  end
+
+  # An address that has sent bills naming two different companies is
+  # probably someone forwarding them, like a landlord: suggest it.
+  defp forwarder_hint(%{"sender" => sender, "merchant" => merchant}, forwarders)
+       when is_binary(sender) and is_binary(merchant) do
+    if MapSet.member?(forwarders, sender) do
+      nil
+    else
+      mine = companies([merchant])
+
+      from(d in Document, where: d.sender == ^sender and not is_nil(d.reading), select: d.reading)
+      |> Repo.all()
+      |> Enum.any?(fn r ->
+        is_binary(r["merchant"]) and not same_company?(companies([r["merchant"]]), mine)
+      end)
+      |> if(do: sender)
+    end
+  end
+
+  defp forwarder_hint(_, _), do: nil
+
+  ## Fixing grouping by hand
+
+  @doc """
+  Puts two bills to check together: `item_id`'s documents join `target_id`,
+  whose details are worked out again from all its documents. If the target
+  is matched to a bill on the Bills page, the other one's names become
+  aliases of it, so next time Tab puts them together itself.
+  """
+  def join(%Scope{} = scope, item_id, target_id) when item_id != target_id do
+    broadcast(
+      scope,
+      as_user(scope, fn ->
+        open =
+          from i in Item, where: i.status in ~w(ready unreadable waiting), preload: :documents
+
+        with {:ok, item} <- found(Repo.get(open, item_id)),
+             {:ok, target} <- found(Repo.get(open, target_id)) do
+          from(d in Document, where: d.item_id == ^item.id)
+          |> Repo.update_all(set: [item_id: target.id, updated_at: now()])
+
+          {:ok, target} = rebuild(target)
+          {:ok, _} = close(item, "put together by hand")
+
+          if target.template_id,
+            do:
+              {:ok, _} =
+                Tab.Bills.add_aliases(scope, target.template_id, item.proposal["names"] || [])
+
+          {:ok, target}
+        end
+      end)
+    )
+  end
+
+  def join(_, _, _), do: {:error, :not_found}
+
+  @doc """
+  Takes one document out of a bill to check and makes it a bill of its own.
+  Both bills' details are worked out again from their documents.
+  """
+  def split(%Scope{} = scope, item_id, document_id) do
+    broadcast(
+      scope,
+      as_user(scope, fn ->
+        with {:ok, item} <-
+               found(
+                 Repo.one(
+                   from i in Item,
+                     where: i.id == ^item_id and i.status in ~w(ready unreadable waiting),
+                     preload: :documents
+                 )
+               ),
+             true <- length(item.documents) > 1 || {:error, :only_document},
+             true <- Enum.any?(item.documents, &(&1.id == document_id)) || {:error, :not_found},
+             {:ok, new} <-
+               Repo.insert(%Item{source: item.source, group_id: item.group_id, status: "ready"}) do
+          from(d in Document, where: d.id == ^document_id)
+          |> Repo.update_all(set: [item_id: new.id, updated_at: now()])
+
+          {:ok, _} = rebuild(item)
+          {:ok, new} = rebuild(new)
+
+          template = match_template(new.proposal["names"] || [], new.group_id)
+
+          new
+          |> Ecto.Changeset.change(template_id: template && template.id, read_at: now())
+          |> Repo.update()
+        end
+      end)
+    )
+  end
+
+  # Works an item's details out again from what was read in each document.
+  defp rebuild(item) do
+    readings =
+      from(d in Document,
+        where: d.item_id == ^item.id and not is_nil(d.reading),
+        order_by: [asc_nulls_last: d.sent_at, asc: d.inserted_at],
+        select: d.reading
+      )
+      |> Repo.all()
+
+    case readings do
+      [] ->
+        item
+        |> Ecto.Changeset.change(status: "unreadable", proposal: Tab.Inbox.Proposal.blank())
+        |> Repo.update()
+
+      [first | rest] ->
+        merged = Enum.reduce(rest, first, &merge(&2, &1))
+        update_proposal(%{item | status: "ready"}, merged)
+    end
   end
 
   @doc false
@@ -702,29 +852,21 @@ defmodule Tab.Inbox do
     end)
   end
 
-  # By sender first (what someone confirmed before), then by name.
-  defp match_template(merchant, sender, group_id) do
-    live = from t in Template, where: is_nil(t.deleted_at)
-    live = if group_id, do: where(live, [t], t.group_id == ^group_id), else: live
-    domain = Email.domain(sender)
+  # The bill on the Bills page this document's names match: its name or
+  # any of its aliases.
+  defp match_template(names, group_id) do
+    keys = companies(names || [])
 
-    by_sender =
-      sender &&
-        Repo.one(
-          from t in live, where: t.sender in ^Enum.reject([sender, domain], &is_nil/1), limit: 1
-        )
+    if keys == [] do
+      nil
+    else
+      live = from t in Template, where: is_nil(t.deleted_at)
+      live = if group_id, do: where(live, [t], t.group_id == ^group_id), else: live
 
-    by_sender || (merchant && by_name(live, merchant))
-  end
-
-  defp by_name(live, merchant) do
-    m = String.downcase(merchant)
-
-    Repo.all(live)
-    |> Enum.find(fn t ->
-      n = String.downcase(t.name)
-      String.length(n) >= 3 and (String.contains?(m, n) or String.contains?(n, m))
-    end)
+      live
+      |> Repo.all()
+      |> Enum.find(&same_company?(companies([&1.name | &1.aliases]), keys))
+    end
   end
 
   defp only_group do

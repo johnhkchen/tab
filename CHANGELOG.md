@@ -28,6 +28,13 @@ Send Tab a bill and it fills in the expense for you to check.
 - One bill, several emails: the "bill is ready" email, the autopay notice,
   and the payment confirmation gather into one bill to check. One that
   arrives after you saved the bill goes with that expense instead.
+- Bills on the Bills page keep the other names they go by ("SFPUC",
+  "sfwater.org"). Tab adds names it sees when you save a bill, and you can
+  edit them.
+- A forwarders list for each group: a landlord who sends you bills for
+  several companies isn't mistaken for the company. Tab suggests adding one.
+- Fix Tab's grouping by hand: put two bills to check together, or take a
+  document out of one.
 - Tab doesn't keep originals. Once you save or drop a bill, Tab deletes them
   and keeps a note of each on the expense (who sent it, when, the amount)
   with a search line for finding it again in your email.

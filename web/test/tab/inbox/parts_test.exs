@@ -6,7 +6,7 @@ defmodule Tab.Inbox.PartsTest do
   alias Tab.Inbox.{Email, Mail, Proposal, Resend}
 
   doctest Tab.Inbox.Email
-  doctest Tab.Inbox, only: [local_part: 1, search: 3, companies: 2]
+  doctest Tab.Inbox, only: [local_part: 1, search: 3, companies: 1]
 
   @today ~D[2026-10-13]
 
@@ -138,6 +138,20 @@ defmodule Tab.Inbox.PartsTest do
       assert text =~ "Amount due:"
       assert text =~ "$84.20"
       refute text =~ "alert"
+    end
+
+    test "forwarded twice (a landlord's forward, forwarded again), it reads the company's own email" do
+      raw =
+        "From: Priya <priya@gmail.test>\r\nSubject: Fwd: Fwd: Your bill\r\nContent-Type: text/plain\r\n\r\n" <>
+          "---------- Forwarded message ---------\r\nFrom: Landlord <landlord@rentals.test>\r\n" <>
+          "Date: Mon, Oct 5, 2026 at 9:00 AM\r\nSubject: Fwd: Your bill\r\n\r\nSee below.\r\n\r\n" <>
+          "---------- Forwarded message ---------\r\nFrom: <noreply@sfwater.org>\r\n" <>
+          "Date: Thu, Sep 24, 2026 at 7:28 PM\r\nSubject: Your bill\r\n\r\nAmount due $50.00\r\n"
+
+      assert {:ok, e} = Email.parse(raw)
+
+      assert {e.sender, e.original_subject, e.sent_on} ==
+               {"noreply@sfwater.org", "Your bill", ~D[2026-09-24]}
     end
 
     test "spots Gmail's forwarding check and its code" do

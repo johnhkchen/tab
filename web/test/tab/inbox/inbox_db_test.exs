@@ -275,6 +275,59 @@ defmodule Tab.Inbox.InboxDBTest do
     end
   end
 
+  describe "bill_forwarders" do
+    test "the group sees and keeps the list; nobody else does", ctx do
+      id = new_id()
+
+      run!(
+        ctx.housemate,
+        "INSERT INTO bill_forwarders (id, group_id, address) VALUES ($1, $2, 'landlord@rentals.test')",
+        [id, ctx.group]
+      )
+
+      assert count(ctx.owner, "bill_forwarders") == 1
+      assert count(ctx.stranger, "bill_forwarders") == 0
+
+      assert refused?(
+               run(
+                 ctx.stranger,
+                 "INSERT INTO bill_forwarders (group_id, address) VALUES ($1, 'x@y.test')",
+                 [ctx.group]
+               )
+             )
+
+      assert {:ok, %{num_rows: 0}} =
+               run(ctx.stranger, "UPDATE bill_forwarders SET deleted_at = now()")
+
+      assert refused?(run(ctx.owner, "UPDATE bill_forwarders SET address = 'z@y.test'"))
+
+      assert {:ok, %{num_rows: 1}} =
+               run(ctx.owner, "UPDATE bill_forwarders SET deleted_at = now() WHERE id = $1", [id])
+
+      # Kept in the group's history like any shared record.
+      assert [[_]] =
+               owner!(
+                 "SELECT 1 FROM audit_log WHERE table_name = 'bill_forwarders' AND action = 'insert'"
+               )
+    end
+
+    test "addresses are stored lowercase and must look like one", ctx do
+      assert {:error, _} =
+               run(
+                 ctx.owner,
+                 "INSERT INTO bill_forwarders (group_id, address) VALUES ($1, 'Landlord@Rentals.test')",
+                 [ctx.group]
+               )
+
+      assert {:error, _} =
+               run(
+                 ctx.owner,
+                 "INSERT INTO bill_forwarders (group_id, address) VALUES ($1, 'not an address')",
+                 [ctx.group]
+               )
+    end
+  end
+
   describe "the new columns" do
     test "people set their own digest days, within 1 to 28", ctx do
       assert {:ok, %{num_rows: 1}} =

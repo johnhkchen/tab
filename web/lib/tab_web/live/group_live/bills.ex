@@ -49,6 +49,9 @@ defmodule TabWeb.GroupLive.Bills do
                 Late
               </span>
               <span class="block text-sm text-ink-soft">{summary(t, @data)}</span>
+              <span :if={t.aliases != []} class="block text-sm text-ink-soft">
+                Also called {Enum.join(t.aliases, ", ")}
+              </span>
             </span>
             <span :if={!@data.archived?} class="flex flex-wrap gap-2">
               <.button navigate={~p"/groups/#{@data.group}/expenses/new?template=#{t.id}"}>
@@ -70,6 +73,48 @@ defmodule TabWeb.GroupLive.Bills do
         </ul>
       </.card>
 
+      <.card title="Who forwards bills to you" id="forwarders">
+        <p class="mb-3 text-sm text-ink-soft">
+          A landlord or property manager who sends bills for several companies. Tab won't mistake
+          them for the company; it reads the company from the bill itself.
+        </p>
+        <ul :if={@forwarders != []} class="mb-3 divide-y divide-line text-sm">
+          <li
+            :for={f <- @forwarders}
+            id={"forwarder-#{f.id}"}
+            class="flex items-center justify-between gap-2 py-2"
+          >
+            <span class="min-w-0 break-all">{f.address}</span>
+            <button
+              :if={!@data.archived?}
+              phx-click="remove_forwarder"
+              phx-value-id={f.id}
+              class="px-2 py-1 text-warn underline"
+            >
+              Remove
+            </button>
+          </li>
+        </ul>
+        <form
+          :if={!@data.archived?}
+          id="forwarder_form"
+          phx-submit="add_forwarder"
+          class="flex flex-wrap items-end gap-2"
+        >
+          <div class="min-w-48 flex-1">
+            <.input
+              name="address"
+              id="forwarder_address"
+              type="email"
+              label="Their email address"
+              value=""
+              errors={@forwarder_errors}
+            />
+          </div>
+          <.button variant="soft" class="mb-2">Add</.button>
+        </form>
+      </.card>
+
       <form
         :if={!@data.archived?}
         id="bill_form"
@@ -85,6 +130,14 @@ defmodule TabWeb.GroupLive.Bills do
             value={@f["name"]}
             errors={@errors[:name] || []}
             placeholder="Rent, Internet, Electric…"
+          />
+          <.input
+            name="bill[aliases]"
+            id="bill_aliases"
+            label="Also called (optional)"
+            hint="Other names on its bills, and the addresses they come from, separated by commas. Tab adds ones it sees."
+            value={@f["aliases"]}
+            placeholder="SFPUC, San Francisco Water, sfwater.org"
           />
           <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
             <.input
@@ -175,10 +228,10 @@ defmodule TabWeb.GroupLive.Bills do
   end
 
   defp load(socket) do
-    {:ok, templates} =
-      Bills.list_templates(socket.assigns.current_scope, socket.assigns.data.group.id)
-
-    assign(socket, templates: templates)
+    %{current_scope: scope, data: data} = socket.assigns
+    {:ok, templates} = Bills.list_templates(scope, data.group.id)
+    {:ok, forwarders} = Bills.list_forwarders(scope, data.group.id)
+    assign(socket, templates: templates, forwarders: forwarders, forwarder_errors: [])
   end
 
   defp reset(socket) do
@@ -194,7 +247,8 @@ defmodule TabWeb.GroupLive.Bills do
         "cadence_days" => "",
         "stability" => "variable",
         "default_payer" => "",
-        "autopay_day" => ""
+        "autopay_day" => "",
+        "aliases" => ""
       }
     )
   end
@@ -247,13 +301,37 @@ defmodule TabWeb.GroupLive.Bills do
              "cadence_days" => to_string(t.cadence_days || ""),
              "stability" => t.stability,
              "default_payer" => t.default_payer || "",
-             "autopay_day" => to_string(t.autopay_day || "")
+             "autopay_day" => to_string(t.autopay_day || ""),
+             "aliases" => Enum.join(t.aliases, ", ")
            }
          )}
     end
   end
 
   def handle_event("cancel", _, socket), do: {:noreply, reset(socket)}
+
+  def handle_event("add_forwarder", %{"address" => address}, socket) do
+    case Bills.add_forwarder(socket.assigns.current_scope, socket.assigns.data.group.id, address) do
+      {:ok, _} ->
+        {:noreply, socket |> put_flash(:info, "Added.") |> load()}
+
+      {:error, %Ecto.Changeset{} = cs} ->
+        {:noreply,
+         assign(socket,
+           forwarder_errors:
+             Keyword.get_values(cs.errors, :address)
+             |> Enum.map(&TabWeb.CoreComponents.translate_error/1)
+         )}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "That didn't save. Try again.")}
+    end
+  end
+
+  def handle_event("remove_forwarder", %{"id" => id}, socket) do
+    {:ok, _} = Bills.remove_forwarder(socket.assigns.current_scope, id)
+    {:noreply, socket |> put_flash(:info, "Removed.") |> load()}
+  end
 
   def handle_event("remove", %{"id" => id}, socket) do
     case Bills.delete_template(socket.assigns.current_scope, id) do
@@ -279,6 +357,7 @@ defmodule TabWeb.GroupLive.Bills do
       stability: f["stability"],
       default_payer: blank(f["default_payer"]),
       autopay_day: blank(f["autopay_day"]),
+      aliases: String.split(f["aliases"] || "", ","),
       default_split: split
     }
   end

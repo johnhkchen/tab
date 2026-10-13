@@ -59,6 +59,32 @@ defmodule TabWeb.InboxLive.Show do
         </ul>
       </.card>
 
+      <.card :if={@hint} id="forwarder-hint">
+        <p>
+          {@hint} sent bills from two different companies. Is it someone who forwards bills to you,
+          like a landlord?
+        </p>
+        <.button variant="soft" class="mt-2" phx-click="add_forwarder">
+          Yes: read the company from the bill
+        </.button>
+      </.card>
+
+      <.card :if={@others != []} title="Same bill as another?" id="join">
+        <form id="join_form" phx-submit="join" class="flex flex-wrap items-end gap-2">
+          <div class="min-w-48 flex-1">
+            <.input
+              name="target"
+              id="join_target"
+              type="select"
+              label="Put it together with"
+              options={@others}
+              value={elem(hd(@others), 1)}
+            />
+          </div>
+          <.button variant="soft" class="mb-2">Put together</.button>
+        </form>
+      </.card>
+
       <.card :if={@item.status != "reading"} title="Add it to a group" id="choose">
         <p :if={@groups == []} class="text-ink-soft">
           You're not in a group. <.link navigate={~p"/groups"} class="underline">Start one</.link>
@@ -101,6 +127,7 @@ defmodule TabWeb.InboxLive.Show do
           :if={length(@item.documents) > 1}
           documents={@item.documents}
           id="item-documents"
+          split
         />
         <img
           :if={@main && @main.kind == "photo"}
@@ -171,7 +198,40 @@ defmodule TabWeb.InboxLive.Show do
         _ -> {nil, nil}
       end
 
-    assign(socket, item: item, main: main, email: email, attachment: attachment)
+    scope = socket.assigns.current_scope
+    {:ok, open} = Inbox.list_items(scope)
+
+    others =
+      for i <- open, i.id != item.id, i.status != "reading" do
+        amount = i.proposal["period_cents"] || i.proposal["total_cents"]
+
+        label =
+          Enum.join(
+            Enum.reject([Index.title(i), amount && TabWeb.Format.money(amount)], &is_nil/1),
+            ", "
+          )
+
+        {label, i.id}
+      end
+
+    hint =
+      with sender when is_binary(sender) <- item.proposal["suggest_forwarder"],
+           gid when is_binary(gid) <- item.group_id,
+           {:ok, fs} <- Tab.Bills.list_forwarders(scope, gid),
+           false <- Enum.any?(fs, &(&1.address == sender)) do
+        sender
+      else
+        _ -> nil
+      end
+
+    assign(socket,
+      item: item,
+      main: main,
+      email: email,
+      attachment: attachment,
+      others: others,
+      hint: hint
+    )
   end
 
   @impl true
@@ -186,6 +246,47 @@ defmodule TabWeb.InboxLive.Show do
   def handle_event("check", %{"group_id" => group_id}, socket) do
     {:noreply,
      push_navigate(socket, to: ~p"/groups/#{group_id}/expenses/new?item=#{socket.assigns.item}")}
+  end
+
+  def handle_event("join", %{"target" => target}, socket) do
+    case Inbox.join(socket.assigns.current_scope, socket.assigns.item.id, target) do
+      {:ok, _} ->
+        {:noreply,
+         socket |> put_flash(:info, "Put together.") |> push_navigate(to: ~p"/inbox/#{target}")}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "That didn't work. Try again.")}
+    end
+  end
+
+  def handle_event("split", %{"id" => doc_id}, socket) do
+    case Inbox.split(socket.assigns.current_scope, socket.assigns.item.id, doc_id) do
+      {:ok, _} ->
+        {:ok, item} = Inbox.get_item(socket.assigns.current_scope, socket.assigns.item.id)
+
+        {:noreply,
+         socket
+         |> put_flash(:info, "Taken out. It's its own bill to check now.")
+         |> assign_item(item)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "That didn't work. Try again.")}
+    end
+  end
+
+  def handle_event("add_forwarder", _, socket) do
+    %{item: item, hint: sender, current_scope: scope} = socket.assigns
+
+    case Tab.Bills.add_forwarder(scope, item.group_id, sender) do
+      {:ok, _} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, "Added. Tab reads the company from their bills now.")
+         |> assign(hint: nil)}
+
+      {:error, _} ->
+        {:noreply, put_flash(socket, :error, "That didn't save. Try again.")}
+    end
   end
 
   def handle_event("dismiss", _, socket) do

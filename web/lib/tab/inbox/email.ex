@@ -79,23 +79,34 @@ defmodule Tab.Inbox.Email do
 
   def domain(address) do
     case String.split(address, "@") do
-      [_, host] ->
-        host
-        |> String.split(".")
-        |> then(fn labels -> if length(labels) > 2, do: Enum.take(labels, -2), else: labels end)
-        |> Enum.join(".")
-
-      _ ->
-        nil
+      [_, host] -> domain_of_host(host)
+      _ -> nil
     end
+  end
+
+  @doc ~S"""
+  A host's last two labels.
+
+      iex> Tab.Inbox.Email.domain_of_host("billpay.pge.com")
+      "pge.com"
+  """
+  def domain_of_host(host) do
+    host
+    |> String.split(".")
+    |> then(fn labels -> if length(labels) > 2, do: Enum.take(labels, -2), else: labels end)
+    |> Enum.join(".")
   end
 
   @markers ~r/^-+ ?Forwarded message ?-+$|^Begin forwarded message:?$|^-+ ?Original Message ?-+$/im
 
-  # The From, Date or Sent, and Subject lines of the first forwarded block.
+  # The From, Date or Sent, and Subject lines of the innermost forwarded
+  # block: forwarded twice (a landlord's forward, forwarded again), the last
+  # block is the company's own email.
   defp forwarded(text) do
-    case Regex.split(@markers, String.replace(text, "\r", ""), parts: 2) do
-      [_, rest] ->
+    case Regex.split(@markers, String.replace(text, "\r", "")) do
+      [_ | [_ | _] = blocks] ->
+        rest = List.last(blocks)
+
         rest
         |> String.split("\n")
         |> Enum.take(12)

@@ -27,6 +27,14 @@ defmodule Tab.Repo.Migrations.CreateInbox do
         update: {@mine, @mine}
       }
     },
+    bill_forwarders: {
+      ["SELECT", "INSERT", "UPDATE (deleted_at, updated_at)"],
+      %{
+        select: "auth.is_member(group_id)",
+        insert: "auth.can_write(group_id) AND created_by = auth.uid()",
+        update: {"auth.can_write(group_id)", "auth.can_write(group_id)"}
+      }
+    },
     inbound_messages: {
       ["SELECT"],
       %{select: @mine, insert: nil, update: nil}
@@ -35,7 +43,7 @@ defmodule Tab.Repo.Migrations.CreateInbox do
       [
         "SELECT",
         "INSERT",
-        "UPDATE (item_id, expense_id, content, purged_at, role, amount_cents, search, updated_at)"
+        "UPDATE (item_id, expense_id, content, purged_at, role, amount_cents, search, reading, updated_at)"
       ],
       %{
         # A kept document is as visible as its expense: the subquery runs
@@ -151,6 +159,9 @@ defmodule Tab.Repo.Migrations.CreateInbox do
       sent_at timestamp(0),
       amount_cents bigint CHECK (amount_cents > 0),
       search text CHECK (char_length(search) <= 1000),
+      -- What the reader found in this document alone, so a bill can be
+      -- rebuilt when someone splits a document out of it.
+      reading jsonb CHECK (jsonb_typeof(reading) = 'object'),
       expense_id uuid REFERENCES expenses (id),
       purged_at timestamp(0),
       #{@stamps},
@@ -166,7 +177,40 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
     execute "CREATE INDEX documents_expense ON documents (expense_id) WHERE expense_id IS NOT NULL"
 
-    execute "ALTER TABLE recurring_templates ADD COLUMN sender text CHECK (sender = lower(sender) AND char_length(sender) BETWEEN 3 AND 320)"
+    # Other names a bill goes by: "SFPUC", "San Francisco Water Power Sewer",
+    # "sfwater.org". Learned when people save bills, and editable.
+    execute """
+    ALTER TABLE recurring_templates ADD COLUMN aliases text[] NOT NULL DEFAULT '{}'
+      CHECK (cardinality(aliases) <= 30)
+    """
+
+    # Addresses that forward bills for several companies (a landlord, a
+    # property manager). Mail from them never counts as the company.
+    execute """
+    CREATE TABLE bill_forwarders (
+      id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id uuid NOT NULL REFERENCES groups (id),
+      address text NOT NULL CHECK (address = lower(address) AND address ~ '^[^@\\s]+@[^@\\s]+$' AND char_length(address) <= 320),
+      created_by uuid NOT NULL REFERENCES users (id),
+      deleted_at timestamp(0),
+      #{@stamps}
+    )
+    """
+
+    execute """
+    CREATE UNIQUE INDEX bill_forwarders_unique ON bill_forwarders (group_id, address)
+      WHERE deleted_at IS NULL
+    """
+
+    execute """
+    CREATE TRIGGER bill_forwarders_stamp_created_by BEFORE INSERT ON bill_forwarders
+      FOR EACH ROW EXECUTE FUNCTION ledger.stamp_actor('created_by')
+    """
+
+    execute """
+    CREATE TRIGGER bill_forwarders_audit AFTER INSERT OR UPDATE ON bill_forwarders
+      FOR EACH ROW EXECUTE FUNCTION ledger.audit()
+    """
 
     execute """
     ALTER TABLE profiles ADD COLUMN digest_days integer[] NOT NULL DEFAULT '{10,25}'
@@ -278,7 +322,7 @@ defmodule Tab.Repo.Migrations.CreateInbox do
       execute "CREATE POLICY #{table}_delete ON #{table} FOR DELETE TO tab_user USING (false)"
     end
 
-    execute "GRANT UPDATE (sender) ON recurring_templates TO tab_user"
+    execute "GRANT UPDATE (aliases) ON recurring_templates TO tab_user"
     execute "GRANT UPDATE (digest_days) ON profiles TO tab_user"
 
     execute "REVOKE EXECUTE ON FUNCTION ledger.pending_refs_ok(pending_items) FROM PUBLIC"
@@ -289,9 +333,10 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
   def down do
     execute "REVOKE UPDATE (digest_days) ON profiles FROM tab_user"
-    execute "REVOKE UPDATE (sender) ON recurring_templates FROM tab_user"
+    execute "REVOKE UPDATE (aliases) ON recurring_templates FROM tab_user"
     execute "ALTER TABLE profiles DROP COLUMN digest_days"
-    execute "ALTER TABLE recurring_templates DROP COLUMN sender"
+    execute "ALTER TABLE recurring_templates DROP COLUMN aliases"
+    execute "DROP TABLE IF EXISTS bill_forwarders CASCADE"
 
     # CASCADE takes the pending_items policies that call it.
     execute "DROP FUNCTION ledger.pending_refs_ok(pending_items) CASCADE"

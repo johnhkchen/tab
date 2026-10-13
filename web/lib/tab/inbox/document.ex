@@ -26,6 +26,7 @@ defmodule Tab.Inbox.Document do
     field :sent_at, :naive_datetime
     field :amount_cents, :integer
     field :search, :string
+    field :reading, :map
     field :expense_id, :binary_id
     field :purged_at, :utc_datetime
 
