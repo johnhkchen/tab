@@ -71,6 +71,35 @@ defmodule Tab.Inbox.Resend do
     end
   end
 
+  @doc """
+  Every email Resend has received for this account, newest first, following
+  the `after` cursor page by page. `limit:` sets the page size (1 to 100).
+  `{:ok, [email]}` with the list fields (`id`, `to`, `from`, `subject`,
+  `created_at`, `attachments`, ...), or `{:error, reason}`.
+  """
+  def list_received(opts \\ []) do
+    limit = opts |> Keyword.get(:limit, 100) |> max(1) |> min(100)
+    list_page(%{limit: limit}, [])
+  end
+
+  defp list_page(params, acc) do
+    case Req.get(req(), url: "/emails/receiving", params: params) do
+      {:ok, %{status: 200, body: %{"data" => data} = body}} when is_list(data) ->
+        acc = acc ++ data
+
+        case {body["has_more"], List.last(data)} do
+          {true, %{"id" => last}} -> list_page(Map.put(params, :after, last), acc)
+          _ -> {:ok, acc}
+        end
+
+      {:ok, %{status: status}} ->
+        {:error, {:status, status}}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   defp download(url, max_bytes) do
     # Stop reading past the cap rather than holding a huge message in memory.
     into = fn {:data, data}, {req, resp} ->
