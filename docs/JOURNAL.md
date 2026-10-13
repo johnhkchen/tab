@@ -119,6 +119,14 @@ this repo), **Gotchas**, **Next**.
   emails (PG&E notice, Recology payment, SFPUC notice) the kinds, senders,
   dates, and amounts came out right; the PG&E due date varies between runs
   (the email prints it bare beside the amount).
+- Grouping checked on real documents in dev (maintainer's Recology and
+  SFPUC bills, forwarded to the per-group dev address and uploaded as PDFs;
+  nothing from them committed): Recology's "scheduled" and "approved"
+  payment emails plus its PDF bill became one bill; SFPUC's notice email and
+  its PDF stayed apart until "same amount and same due date" was added,
+  since the email says "SFPUC (San Francisco Water, Power and Sewer)" and the
+  PDF "San Francisco Water Power Sewer". Recology really does send two
+  emails per payment (scheduled, then approved).
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one

@@ -475,7 +475,8 @@ defmodule Tab.Inbox do
   # Saves what the reader found. The document then joins, in order: another
   # open item about the same bill, an expense someone already saved for it,
   # or stays in this item, ready to check. "The same bill" is the same company
-  # and amount within 45 days, or the same company and due date.
+  # and amount within 45 days, the same company and due date, or the same
+  # amount and due date.
   def save_reading(%Scope{} = scope, %Item{} = item, proposal, sender) do
     broadcast(scope, do_save_reading(scope, item, proposal, sender))
   end
@@ -553,11 +554,16 @@ defmodule Tab.Inbox do
     end)
   end
 
+  # Same company and amount within 45 days, or same company and due date.
+  # The same amount due the same day is the same bill even when the names
+  # differ ("SFPUC" in its email, "San Francisco Water Power Sewer" on its PDF).
   defp same_bill?(key, other) do
-    same_company?(key.companies, other.companies) and
-      ((key.amount != nil and key.amount == other.amount and
-          abs(Date.diff(key.on, other.on)) <= 45) or
-         (key.due_on != nil and key.due_on == other.due_on))
+    (same_company?(key.companies, other.companies) and
+       ((key.amount != nil and key.amount == other.amount and
+           abs(Date.diff(key.on, other.on)) <= 45) or
+          (key.due_on != nil and key.due_on == other.due_on))) or
+      (key.amount != nil and key.due_on != nil and key.amount == other.amount and
+         key.due_on == other.due_on)
   end
 
   defp same_open_item(item, key) do

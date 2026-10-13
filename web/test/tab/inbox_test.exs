@@ -468,6 +468,32 @@ defmodule Tab.InboxTest do
       assert other.status == "ready"
     end
 
+    test "an emailed notice and an uploaded PDF with different names but the same amount and due date are one bill",
+         ctx do
+      notice =
+        mail!(
+          ctx.priya,
+          ctx.house.id,
+          forwarded(
+            "noreply@sfwater.org",
+            "Your New Water Bill!",
+            "Thu, Sep 24, 2026 at 7:28 PM",
+            "Amount Due"
+          ),
+          %{@notice | "merchant" => "SFPUC (San Francisco Water, Power and Sewer)"}
+        )
+
+      pdf = upload!(ctx.priya, "%PDF-1.4 water statement")
+      reader_says(%{@notice | "kind" => "bill", "merchant" => "San Francisco Water Power Sewer"})
+      :ok = read!(ctx.priya, pdf)
+
+      assert item(ctx.priya, pdf).status == "merged"
+      {:ok, [item]} = Inbox.list_items(ctx.priya)
+      assert item.id == notice.id
+      assert Enum.map(item.documents, & &1.kind) |> Enum.sort() == ~w(email pdf)
+      assert item.proposal["kind"] == "bill"
+    end
+
     test "a payment for a bill already saved goes with that expense", ctx do
       {:ok, expense} =
         Tab.Ledger.create_expense(ctx.priya, ctx.house.id, %{
