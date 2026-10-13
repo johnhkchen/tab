@@ -240,6 +240,45 @@ defmodule TabWeb.InboundControllerTest do
       refute_enqueued(worker: Mail)
     end
 
+    test "a late bill goes in the digest of whoever usually pays it", ctx do
+      {:ok, house} = Tab.Groups.create_group(ctx.scope, %{name: "Elm Street"})
+      me = ctx.scope.user.id
+
+      {:ok, t} =
+        Tab.Bills.create_template(ctx.scope, house.id, %{
+          name: "Water",
+          default_payer: me,
+          default_split: Tab.Bills.Suggest.equal([{:user, me}])
+        })
+
+      day = Mail.next_digest([10, 25], Date.utc_today())
+
+      {:ok, _} =
+        Tab.Ledger.create_expense(ctx.scope, house.id, %{
+          description: "Water",
+          amount_cents: 3_000,
+          date: Date.add(day, -45),
+          paid_by: me,
+          split: t.default_split,
+          template_id: t.id
+        })
+
+      assert :ok = Mail.enqueue_digests(day)
+      assert [job] = all_enqueued(worker: Mail)
+      assert :ok = perform_job(Mail, job.args)
+
+      assert_email_sent(fn email ->
+        assert email.subject == "A bill hasn't come in"
+        assert email.text_body =~ "Water in Elm Street"
+      end)
+
+      # Logged on time, there's nothing to say.
+      Repo.delete_all(Oban.Job)
+
+      assert :skip =
+               Mail.build("digest", ctx.scope, %{"day" => Date.to_iso8601(Date.add(day, -40))})
+    end
+
     test "with no digest days, each bill gets its own email", ctx do
       {:ok, _} = Tab.Accounts.update_digest_days(ctx.scope, [])
       ctx.reader.(nil)

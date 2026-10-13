@@ -24,11 +24,22 @@ class BillLine {
 class Bill {
     doc_type: DocType,
     merchant: string? @description("who the bill or receipt is from, like PG&E or Trader Joe's"),
-    total: string? @description("the total to pay, as printed, like 84.20; null if unsure"),
+    total: string? @description("the total to pay now, as printed, like 84.20; null if unsure"),
+    current_charges: string? @description(
+        "charges for this period only, not counting any earlier unpaid balance, as printed",
+    ),
+    previous_balance: string? @description(
+        "unpaid balance carried over from earlier bills, as printed; null if none",
+    ),
+    past_due: bool @description("true only if the bill says the account is past due or overdue"),
     date: string? @description("the bill or purchase date, YYYY-MM-DD"),
     due_on: string? @description("when payment is due, YYYY-MM-DD"),
-    period_start: string? @description("first day of the service period, YYYY-MM-DD"),
-    period_end: string? @description("last day of the service period, YYYY-MM-DD"),
+    period_start: string? @description(
+        "first day of the service period, YYYY-MM-DD; with several periods, the earliest start",
+    ),
+    period_end: string? @description(
+        "last day of the service period, YYYY-MM-DD; with several periods, the latest end",
+    ),
     account_hint: string? @description("the last 4 digits of the account number only"),
     tax: string? @description("tax, as printed"),
     tip: string? @description("tip, as printed"),

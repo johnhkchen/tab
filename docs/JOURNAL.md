@@ -92,6 +92,14 @@ this repo), **Gotchas**, **Next**.
   carried balance and the past-due notice on both runs; PG&E prints no
   single current-charges line, so code would work it out as total minus
   carried balance.
+- From the real-bill benchmark, the maintainer decided: the form fills in
+  this period's charges plus a "Carried over from earlier bills" field
+  (default 0, one tap to add the carried balance, also for late fees); a
+  past-due bill is flagged only, no email; late bills (nothing logged a week
+  past the usual time) show on the Bills page and in the digest of whoever
+  usually pays. Built before v0.4.0. The reader gained `current_cents`,
+  `previous_cents`, `past_due`, and earliest-start/latest-end periods; rerun
+  on the same real bill, 2 of 2 runs got all of them right.
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one

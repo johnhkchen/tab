@@ -63,6 +63,44 @@ defmodule Tab.Bills.Dates do
     end
   end
 
+  @doc """
+  When the next bill should have been logged by: one cadence after the last
+  one. Nil for `irregular` bills and bills never logged.
+
+      iex> next_due("monthly", nil, ~D[2026-08-31])
+      ~D[2026-09-30]
+      iex> next_due("custom_n_days", 14, ~D[2026-10-01])
+      ~D[2026-10-15]
+  """
+  def next_due(_, _, nil), do: nil
+  def next_due("irregular", _, _), do: nil
+  def next_due("custom_n_days", n, last) when is_integer(n), do: Date.add(last, n)
+
+  def next_due(cadence, _, last) do
+    case Map.fetch(%{"monthly" => 1, "bimonthly" => 2, "quarterly" => 3}, cadence) do
+      {:ok, n} -> Date.shift(last, month: n)
+      :error -> nil
+    end
+  end
+
+  @late_after 7
+
+  @doc """
+  Whether a bill is late: nothing logged a week past its next due date. Works
+  from what's been logged, so it needs no bill reading.
+
+      iex> late?("monthly", nil, ~D[2026-08-15], ~D[2026-09-22])
+      false
+      iex> late?("monthly", nil, ~D[2026-08-15], ~D[2026-09-23])
+      true
+  """
+  def late?(cadence, days, last, today) do
+    case next_due(cadence, days, last) do
+      nil -> false
+      due -> Date.diff(today, due) > @late_after
+    end
+  end
+
   @doc "Days from `a` to `b`, both included."
   def days({a, b}), do: Date.diff(b, a) + 1
 

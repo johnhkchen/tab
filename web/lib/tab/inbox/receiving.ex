@@ -130,7 +130,11 @@ defmodule Tab.Inbox.Receiving do
     end
   end
 
-  @doc "People with a digest due today and something ready in their inbox."
+  @doc """
+  People with a digest due today and something to put in it: an item ready
+  to check, or a group with a regular bill that might be late (the digest
+  itself works out lateness, as the person).
+  """
   def digest_recipients(today \\ Date.utc_today()) do
     Repo.all(
       from u in User,
@@ -139,11 +143,21 @@ defmodule Tab.Inbox.Receiving do
         on: p.user_id == u.id,
         where:
           ^today.day in p.digest_days and
-            exists(
-              from i in "pending_items",
-                where: i.user_id == parent_as(:user).id and i.status in ["ready", "unreadable"],
-                select: 1
-            ),
+            (exists(
+               from i in "pending_items",
+                 where: i.user_id == parent_as(:user).id and i.status in ["ready", "unreadable"],
+                 select: 1
+             ) or
+               exists(
+                 from m in "memberships",
+                   join: t in "recurring_templates",
+                   on: t.group_id == m.group_id,
+                   where:
+                     m.user_id == parent_as(:user).id and is_nil(m.left_at) and
+                       is_nil(t.deleted_at) and t.cadence != "irregular" and
+                       not is_nil(t.last_logged_on),
+                   select: 1
+               )),
         select: u.id
     )
   end

@@ -5,7 +5,9 @@ defmodule Tab.Inbox.Proposal do
   blank, never guessed: the reader only ever fills in a form a person checks.
 
   Input is the reader's JSON (string keys). Output keeps only known fields,
-  with dates as ISO strings so it stores as jsonb unchanged.
+  with dates as ISO strings so it stores as jsonb unchanged. `period_cents` is
+  what this bill adds on its own, without a balance carried from earlier
+  bills; the form fills that in, so a carried balance never counts twice.
   """
 
   @types ~w(utility receipt subscription rent travel phone other)
@@ -30,9 +32,13 @@ defmodule Tab.Inbox.Proposal do
       "account_hint" => hint(raw["account_hint"]),
       "tax_cents" => cents(raw["tax_cents"]),
       "tip_cents" => cents(raw["tip_cents"]),
+      "current_cents" => cents(raw["current_cents"]),
+      "previous_cents" => cents(raw["previous_cents"]),
+      "past_due" => raw["past_due"] == true,
       "line_items" => if(adds_up?(items, raw, total), do: items, else: [])
     }
     |> period_in_order()
+    |> this_period()
   end
 
   def validate(_, today), do: validate(%{}, today)
@@ -103,6 +109,17 @@ defmodule Tab.Inbox.Proposal do
 
     abs(sum - total) <= 100
   end
+
+  # What this bill adds, without a balance carried from earlier bills: the
+  # printed current charges, else the total minus the carried balance.
+  defp this_period(%{"current_cents" => c} = p) when is_integer(c),
+    do: Map.put(p, "period_cents", c)
+
+  defp this_period(%{"total_cents" => t, "previous_cents" => prev} = p)
+       when is_integer(t) and is_integer(prev) and t > prev,
+       do: Map.put(p, "period_cents", t - prev)
+
+  defp this_period(p), do: Map.put(p, "period_cents", p["total_cents"])
 
   defp period_in_order(%{"period_start" => from, "period_end" => to} = p)
        when is_binary(from) and is_binary(to) do

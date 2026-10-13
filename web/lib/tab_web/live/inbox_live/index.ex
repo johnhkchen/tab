@@ -70,6 +70,9 @@ defmodule TabWeb.InboxLive.Index do
               <span class="block text-sm text-ink-soft">{summary(item)}</span>
             </span>
             <span class="flex flex-wrap items-center gap-2 text-right">
+              <span :if={item.proposal["past_due"]} class="clay-chip px-2 py-0.5 text-xs text-warn">
+                Past due
+              </span>
               <span
                 :if={Mail.due_soon?(item.due_on, @digest_days, @today)}
                 class="clay-chip px-2 py-0.5 text-xs text-warn"

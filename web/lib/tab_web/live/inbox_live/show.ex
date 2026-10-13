@@ -37,6 +37,13 @@ defmodule TabWeb.InboxLive.Show do
             {@item.proposal["period_start"]} to {@item.proposal["period_end"]}
           </.row>
         </dl>
+        <p :if={@item.proposal["past_due"]} class="mt-3 text-warn" id="past-due">
+          The bill says the account is past due. Check that autopay is still on.
+        </p>
+        <p :if={@item.proposal["previous_cents"]} class="mt-3 text-sm" id="carried">
+          It includes <.money cents={@item.proposal["previous_cents"]} /> carried over from an earlier
+          bill. Tab fills in this period's charges; you can add the rest when you save.
+        </p>
         <p :if={@item.duplicate_of} class="mt-3 text-warn" id="duplicate">
           Someone added an expense with the same amount a few days apart. Check it isn't this one.
         </p>

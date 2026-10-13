@@ -41,6 +41,31 @@ defmodule Tab.Inbox.PartsTest do
       end
     end
 
+    test "a carried balance stays out of this period's amount" do
+      carried =
+        Proposal.validate(
+          %{"total_cents" => 31_240, "previous_cents" => 12_390, "past_due" => true},
+          @today
+        )
+
+      assert {carried["period_cents"], carried["past_due"]} == {18_850, true}
+
+      printed =
+        Proposal.validate(
+          %{"total_cents" => 31_240, "current_cents" => 18_850, "previous_cents" => 12_390},
+          @today
+        )
+
+      assert printed["period_cents"] == 18_850
+
+      plain = Proposal.validate(%{"total_cents" => 8_420, "past_due" => "yes"}, @today)
+      assert {plain["period_cents"], plain["past_due"]} == {8_420, false}
+
+      # A carried balance bigger than the total (a credit) leaves the total.
+      odd = Proposal.validate(%{"total_cents" => 5_000, "previous_cents" => 9_000}, @today)
+      assert odd["period_cents"] == 5_000
+    end
+
     test "unknown types become other; junk input is a blank proposal" do
       assert Proposal.validate(%{"doc_type" => "invoice"}, @today)["doc_type"] == "other"
       assert Proposal.validate("nonsense", @today) == Proposal.validate(%{}, @today)

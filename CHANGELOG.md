@@ -19,6 +19,12 @@ Send Tab a bill and it fills in the expense for you to check.
   payer, and autopay date. A first bill from a company can become a bill.
 - A digest email on the 10th and 25th (or days you pick) lists bills waiting
   to be checked. A bill due sooner gets its own email.
+- A bill that carries an unpaid balance from last time fills in only this
+  period's charges, so nothing counts twice. Add the carried amount, or a
+  late fee, in one field. A bill that says the account is past due is
+  flagged.
+- A bill that hasn't come in a week after it usually does shows "Late" on
+  the Bills page and in the digest, in case autopay stopped.
 - Keep the original with the expense if you like; otherwise Tab deletes it
   once you save or drop the bill.
 - Self-hosting: set `ANTHROPIC_API_KEY` on `extract` to turn reading on

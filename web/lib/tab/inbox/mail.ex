@@ -82,24 +82,26 @@ defmodule Tab.Inbox.Mail do
   end
 
   @doc false
-  def build("digest", scope, _args) do
-    case ready(scope) do
-      [] ->
+  def build("digest", scope, args) do
+    today =
+      with {:ok, d} <- Date.from_iso8601(args["day"] || ""), do: d, else: (_ -> Date.utc_today())
+
+    {:ok, late} = Tab.Bills.late_for(scope, today)
+
+    case {ready(scope), late} do
+      {[], []} ->
         :skip
 
-      items ->
+      {items, late} ->
         {:ok,
          new()
-         |> subject(count(items) <> " to check on Tab")
-         |> text_body("""
-         These came in since you last looked. Check each one and save it, or drop it:
-
-         #{Enum.map_join(items, "\n", &line/1)}
-
-         #{url(~p"/inbox")}
-
-         #{footer()}
-         """)}
+         |> subject(digest_subject(items, late))
+         |> text_body(
+           Enum.join(
+             Enum.reject([ready_part(items), late_part(late), footer()], &is_nil/1),
+             "\n\n"
+           )
+         )}
     end
   end
 
@@ -128,6 +130,33 @@ defmodule Tab.Inbox.Mail do
   defp ready(scope) do
     {:ok, items} = Inbox.list_items(scope)
     Enum.filter(items, &(&1.status in ~w(ready unreadable)))
+  end
+
+  defp digest_subject([], [_]), do: "A bill hasn't come in"
+  defp digest_subject([], late), do: "#{length(late)} bills haven't come in"
+  defp digest_subject(items, _), do: count(items) <> " to check on Tab"
+
+  defp ready_part([]), do: nil
+
+  defp ready_part(items) do
+    """
+    These came in since you last looked. Check each one and save it, or drop it:
+
+    #{Enum.map_join(items, "\n", &line/1)}
+
+    #{url(~p"/inbox")}\
+    """
+  end
+
+  defp late_part([]), do: nil
+
+  defp late_part(late) do
+    """
+    Nobody has logged these bills, and the next one was due over a week ago.
+    If autopay stopped, the bill may be past due:
+
+    #{Enum.map_join(late, "\n", fn {g, t} -> "  #{t.name} in #{g.name}: #{url(~p"/groups/#{g}/bills")}" end)}\
+    """
   end
 
   defp count([_]), do: "1 bill"

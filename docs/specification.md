@@ -524,6 +524,9 @@ reader switched off.
 | Whose key reads bills | One Anthropic key for the whole server, `ANTHROPIC_API_KEY`, set on the `extract` service only (Doppler or `.env`). The web app never holds it. Model: Claude Haiku 5.5 (`claude-haiku-5-5`), fixed, not a setting. Per-person keys wait for Cloud. Decided 2026-10-13. |
 | What phase 4 covers | Photo and PDF upload, forwarded email with a setup guide, the review list, matching bills to phase 3 templates, and the digest. Submission links for people without an account wait for the Cloud edition, since their cost lands on the issuer's allowance. Decided 2026-10-13. |
 | The original document | Deleted once its item is confirmed or dismissed. A "Keep the original" box on the review form attaches it to the expense instead, visible to everyone who can see the expense. Decided 2026-10-13. |
+| A balance carried from earlier bills | The form fills in this period's charges only (`period_cents`: the printed current charges, else total minus the carried balance), so a bill already logged never counts twice. A "Carried over from earlier bills" field, 0 by default, adds to it; when the bill shows a carried balance, the form offers it in one tap. It also takes late fees and other surprises. Decided 2026-10-13. |
+| A past-due bill | Flagged "Past due" in Bills to check, on the bill, and on the form, with a note to check autopay. No extra email. Decided 2026-10-13. |
+| Late bills | A regular bill (not `irregular`) shows "Late" on the Bills page when nothing has been logged a week past one cadence after the last one, and the digest lists it for whoever usually pays it, or everyone in the group when nobody's set. Needs no reading. Decided 2026-10-13. |
 | PDFs | Sent to the model as PDFs (Claude reads them natively), not as text pulled out locally. At Haiku prices a 10-page cap keeps a statement under a cent, and local extraction loses table layout. |
 | Photos | Resized in the browser to at most 1600 px on the long side and re-encoded as JPEG before upload, so phone photos (including HEIC, which the model can't take) arrive small and in a format it reads. |
 | Where originals live | In Postgres (`bytea`), under row-level security, inside the nightly backup. The containers keep read-only root filesystems; no upload volume. |
@@ -599,8 +602,10 @@ expense the owner can't see or a private one that isn't theirs.
   rides along fine). Types: `utility`, `receipt`, `subscription`, `rent`,
   `travel`, `phone`, `other`. Amounts come back as printed and BAML code turns
   them into cents.
-- Fields: `merchant`, `total_cents`, `date`, `due_on`, `period_start`,
-  `period_end`, `account_hint` (last 4 only), `line_items` (description, cents),
+- Fields: `merchant`, `total_cents`, `current_cents` (this period only),
+  `previous_cents` (carried from earlier bills), `past_due`, `date`, `due_on`,
+  `period_start`, `period_end` (with several service periods, the earliest
+  start and latest end), `account_hint` (last 4 only), `line_items` (description, cents),
   `tax_cents`, `tip_cents`, and `confidence` per field. A field the reader isn't
   sure of comes back null; the app never fills a guess.
 - The app validates everything it gets back: amounts positive and under $1

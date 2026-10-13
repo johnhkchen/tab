@@ -136,7 +136,27 @@ defmodule TabWeb.ExpenseLive.Form do
           <p :if={@item.duplicate_of} class="mt-2 text-sm text-warn">
             Someone added an expense with the same amount a few days apart. Check it isn't this one.
           </p>
+          <p :if={@item.proposal["past_due"]} class="mt-2 text-sm text-warn" id="past-due">
+            The bill says the account is past due. Check that autopay is still on.
+          </p>
           <div class="mt-3">
+            <.input
+              name="expense[carried]"
+              id="expense_carried"
+              label="Carried over from earlier bills"
+              hint="Late fees, or an earlier bill nobody logged. It adds to the amount above."
+              value={@f["carried"]}
+              errors={@errors[:carried] || []}
+              inputmode="decimal"
+            />
+            <p :if={@item.proposal["previous_cents"]} class="mb-3 text-sm" id="carried-suggestion">
+              The bill carries <.money cents={@item.proposal["previous_cents"]} />
+              from an earlier bill.
+              If someone logged that bill in Tab, leave this at 0.
+              <button type="button" phx-click="add_carried" class="ml-1 underline">
+                Add <.money cents={@item.proposal["previous_cents"]} />
+              </button>
+            </p>
             <.input
               name="expense[keep_original]"
               id="expense_keep_original"
@@ -313,7 +333,7 @@ defmodule TabWeb.ExpenseLive.Form do
     read =
       %{
         "description" => if(template, do: nil, else: p["merchant"]),
-        "amount" => p["total_cents"] && Format.amount_input(p["total_cents"]),
+        "amount" => p["period_cents"] && Format.amount_input(p["period_cents"]),
         "date" => if(template && template.autopay_day, do: nil, else: p["date"]),
         "period_start" => p["period_start"],
         "period_end" => p["period_start"] && p["period_end"],
@@ -325,7 +345,7 @@ defmodule TabWeb.ExpenseLive.Form do
     f =
       state.f
       |> Map.merge(read)
-      |> Map.merge(%{"keep_original" => "false", "new_bill" => "false"})
+      |> Map.merge(%{"keep_original" => "false", "new_bill" => "false", "carried" => "0.00"})
 
     {item, template, %{state | f: f}}
   end
@@ -461,6 +481,11 @@ defmodule TabWeb.ExpenseLive.Form do
     {:noreply, socket |> assign(state) |> suggest() |> preview()}
   end
 
+  def handle_event("add_carried", _, %{assigns: %{item: %{proposal: p}}} = socket) do
+    f = %{socket.assigns.f | "carried" => Format.amount_input(p["previous_cents"] || 0)}
+    {:noreply, socket |> assign(f: f) |> suggest() |> preview()}
+  end
+
   def handle_event("save", params, socket) do
     socket = socket |> assign(read(params, socket.assigns)) |> preview()
     scope = socket.assigns.current_scope
@@ -523,7 +548,7 @@ defmodule TabWeb.ExpenseLive.Form do
   defp preview(socket) do
     socket = assign(socket, amount_check: amount_check(socket.assigns))
 
-    with {:ok, amount} <- Format.parse_money(socket.assigns.f["amount"]),
+    with {:ok, amount} <- total(socket.assigns.f),
          true <- amount > 0,
          {:ok, split} <- build_split(socket.assigns),
          {:ok, shares} <- Split.compute(split, amount) do
@@ -564,7 +589,7 @@ defmodule TabWeb.ExpenseLive.Form do
       date: date(f["date"]),
       period: period(f),
       amount_cents:
-        case Format.parse_money(f["amount"]) do
+        case total(f) do
           {:ok, n} when n > 0 -> n
           _ -> nil
         end
@@ -717,7 +742,7 @@ defmodule TabWeb.ExpenseLive.Form do
   defp attrs(%{f: f, data: data, split_error: split_error} = assigns) do
     private? = f["private"] == "true"
 
-    with {:amount, {:ok, cents}} <- {:amount, Format.parse_money(f["amount"])},
+    with {:amount, {:ok, cents}} <- {:amount, total(f)},
          {:split, nil, {:ok, split}} <- {:split, split_error, build_split(assigns)} do
       {:ok,
        %{
@@ -732,10 +757,29 @@ defmodule TabWeb.ExpenseLive.Form do
          period_end: if(private?, do: nil, else: blank_to_nil(f["period_end"]))
        }}
     else
+      {:amount, :carried} -> {:error, {:field, :carried, "type an amount, like 12.50, or 0"}}
       {:amount, _} -> {:error, {:field, :amount_cents, "type an amount, like 12.50"}}
       {:split, _, _} -> {:error, :split}
     end
   end
+
+  # The amount, plus any balance carried from earlier bills (read bills only).
+  defp total(%{"carried" => carried} = f) do
+    with {:ok, amount} <- Format.parse_money(f["amount"]) do
+      case String.trim(carried) do
+        "" ->
+          {:ok, amount}
+
+        text ->
+          case Format.parse_money(text) do
+            {:ok, extra} when extra >= 0 -> {:ok, amount + extra}
+            _ -> :carried
+          end
+      end
+    end
+  end
+
+  defp total(f), do: Format.parse_money(f["amount"])
 
   defp blank_to_nil(""), do: nil
   defp blank_to_nil(v), do: v

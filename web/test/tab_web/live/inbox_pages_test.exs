@@ -133,6 +133,67 @@ defmodule TabWeb.InboxPagesTest do
     assert {t.name, t.sender} == {"PG&E", "pge.com"}
   end
 
+  test "a past-due bill with a carried balance fills in this period, and the rest is one tap away",
+       %{conn: conn} = ctx do
+    item =
+      read_bill!(
+        ctx.scope,
+        Map.merge(@electric, %{
+          "total_cents" => 31_240,
+          "previous_cents" => 12_390,
+          "past_due" => true
+        })
+      )
+
+    {:ok, _, html} = live(conn, ~p"/inbox")
+    assert html =~ "Past due"
+
+    {:ok, lv, html} = live(conn, ~p"/groups/#{ctx.group}/expenses/new?item=#{item.id}")
+    assert html =~ ~s(value="188.50")
+    assert html =~ "past due"
+    assert html =~ "$123.90"
+    assert html =~ "from an earlier bill"
+
+    # Left at 0 it saves this period only.
+    assert lv |> element("#expense_carried") |> render() =~ ~s(value="0.00")
+    html = lv |> element("button[phx-click=add_carried]") |> render_click()
+    assert html =~ ~s(value="123.90")
+
+    lv |> form("#expense_form", expense: %{carried: "nope"}) |> render_submit()
+    assert render(lv) =~ "type an amount, like 12.50, or 0"
+
+    {:ok, _, _} =
+      lv
+      |> form("#expense_form", expense: %{carried: "123.90"})
+      |> render_submit()
+      |> follow_redirect(conn)
+
+    {:ok, [expense]} = Ledger.list_expenses(ctx.scope, ctx.group.id)
+    assert expense.amount_cents == 31_240
+  end
+
+  test "late bills show on the Bills page", %{conn: conn} = ctx do
+    {:ok, t} =
+      Bills.create_template(ctx.scope, ctx.group.id, %{
+        name: "Water",
+        default_split: Suggest.equal([{:user, ctx.user.id}, {:user, ctx.sam.id}])
+      })
+
+    {:ok, _} =
+      Ledger.create_expense(ctx.scope, ctx.group.id, %{
+        description: "Water",
+        amount_cents: 3_000,
+        date: Date.add(Date.utc_today(), -45),
+        paid_by: ctx.user.id,
+        split: t.default_split,
+        template_id: t.id
+      })
+
+    {:ok, _, html} = live(conn, ~p"/groups/#{ctx.group}/bills")
+    assert html =~ "Late"
+    assert html =~ "check that it was paid"
+  end
+
   test "dropping a bill deletes it from the list", %{conn: conn} = ctx do
     item = read_bill!(ctx.scope, @electric)
     {:ok, lv, _} = live(conn, ~p"/inbox/#{item}")

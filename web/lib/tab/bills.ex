@@ -30,6 +30,31 @@ defmodule Tab.Bills do
     end)
   end
 
+  @doc """
+  Bills that are late (`Tab.Bills.Dates.late?/4`) in the person's active
+  groups and are theirs to chase: they usually pay it, or nobody's set.
+  `[{group, template}]`.
+  """
+  def late_for(%Scope{user: user} = scope, today \\ Date.utc_today()) do
+    as_user(scope, fn ->
+      {:ok,
+       Repo.all(
+         from t in Template,
+           join: g in Tab.Groups.Group,
+           on: g.id == t.group_id,
+           where:
+             is_nil(t.deleted_at) and is_nil(g.deleted_at) and t.cadence != "irregular" and
+               not is_nil(t.last_logged_on) and
+               (is_nil(t.default_payer) or t.default_payer == ^user.id),
+           order_by: [g.name, t.name],
+           select: {g, t}
+       )
+       |> Enum.filter(fn {_, t} ->
+         Dates.late?(t.cadence, t.cadence_days, t.last_logged_on, today)
+       end)}
+    end)
+  end
+
   def get_template(%Scope{} = scope, id) do
     as_user(scope, fn -> found(Repo.one(from t in Template, where: t.id == ^id)) end)
   end

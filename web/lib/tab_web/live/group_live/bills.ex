@@ -7,7 +7,7 @@ defmodule TabWeb.GroupLive.Bills do
   use TabWeb, :live_view
 
   alias Tab.Bills
-  alias Tab.Bills.Template
+  alias Tab.Bills.{Dates, Template}
   alias TabWeb.{Format, GroupData, SplitEditor}
 
   @cadences [
@@ -42,6 +42,12 @@ defmodule TabWeb.GroupLive.Bills do
           >
             <span class="min-w-0">
               <span class="font-semibold">{t.name}</span>
+              <span
+                :if={Dates.late?(t.cadence, t.cadence_days, t.last_logged_on, @today)}
+                class="clay-chip ml-1 px-2 py-0.5 text-xs text-warn"
+              >
+                Late
+              </span>
               <span class="block text-sm text-ink-soft">{summary(t, @data)}</span>
             </span>
             <span :if={!@data.archived?} class="flex flex-wrap gap-2">
@@ -163,7 +169,7 @@ defmodule TabWeb.GroupLive.Bills do
 
     {:ok,
      socket
-     |> assign(data: data, cadences: @cadences, page_title: "Bills")
+     |> assign(data: data, cadences: @cadences, page_title: "Bills", today: Date.utc_today())
      |> reset()
      |> load()}
   end
@@ -299,11 +305,18 @@ defmodule TabWeb.GroupLive.Bills do
       t.last_amount_cents &&
         "#{if t.stability == "fixed", do: "", else: "last "}#{Format.money(t.last_amount_cents)}",
       t.last_logged_on && "logged #{format_date(t.last_logged_on)}",
+      late_note(t, data),
       t.autopay_day && "paid automatically on the #{ordinal(t.autopay_day)}",
       t.default_payer && usually_pays(data, t.default_payer)
     ]
     |> Enum.filter(& &1)
     |> Enum.join(" · ")
+  end
+
+  defp late_note(t, _data) do
+    if Dates.late?(t.cadence, t.cadence_days, t.last_logged_on, Date.utc_today()),
+      do:
+        "the next one was due #{format_date(Dates.next_due(t.cadence, t.cadence_days, t.last_logged_on))}; check that it was paid"
   end
 
   defp usually_pays(%{me: me}, me), do: "you usually pay"
