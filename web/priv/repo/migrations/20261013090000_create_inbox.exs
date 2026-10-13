@@ -1,6 +1,7 @@
 defmodule Tab.Repo.Migrations.CreateInbox do
   @moduledoc """
-  Phase 4 (docs/specification.md, "Phase 4"): forwarding addresses, received
+  Phase 4 (docs/specification.md, "Phase 4"): forwarding addresses (one per
+  person per group), received
   mail, documents, and pending items, with grants and one policy per verb.
 
   These tables belong to one person, not a group, so they stay out of the
@@ -20,7 +21,11 @@ defmodule Tab.Repo.Migrations.CreateInbox do
   @policies [
     forwarding_addresses: {
       ["SELECT", "INSERT", "UPDATE (revoked_at, updated_at)"],
-      %{select: @mine, insert: @mine, update: {@mine, @mine}}
+      %{
+        select: @mine,
+        insert: "#{@mine} AND auth.is_member(group_id)",
+        update: {@mine, @mine}
+      }
     },
     inbound_messages: {
       ["SELECT"],
@@ -60,7 +65,10 @@ defmodule Tab.Repo.Migrations.CreateInbox do
     CREATE TABLE forwarding_addresses (
       id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id uuid NOT NULL REFERENCES users (id),
-      local_part text NOT NULL UNIQUE CHECK (local_part ~ '^[a-z2-7]{24}$'),
+      group_id uuid NOT NULL REFERENCES groups (id),
+      -- The group's name for people to read, then a random tag: the secret.
+      local_part text NOT NULL UNIQUE
+        CHECK (local_part ~ '^([a-z0-9]+-)+[a-z2-7]{10}$' AND char_length(local_part) <= 64),
       revoked_at timestamp(0),
       #{@stamps}
     )
@@ -68,7 +76,7 @@ defmodule Tab.Repo.Migrations.CreateInbox do
 
     execute """
     CREATE UNIQUE INDEX forwarding_addresses_one_live
-      ON forwarding_addresses (user_id) WHERE revoked_at IS NULL
+      ON forwarding_addresses (user_id, group_id) WHERE revoked_at IS NULL
     """
 
     execute """

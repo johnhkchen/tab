@@ -544,10 +544,15 @@ reader switched off.
 
 ### Tables
 
-**forwarding_addresses**: `id`, `user_id`, `local_part` (24 random base32
-characters, unique), `created_at`, `revoked_at`. One live address per person.
-Making a new one revokes the old one. The address is
-`<local_part>@<TAB_INBOUND_DOMAIN>`, and the random part is the only secret.
+**forwarding_addresses**: `id`, `user_id`, `group_id`, `local_part`
+(unique), `created_at`, `revoked_at`. One live address per person per group
+they're in, like `elm-street-house-k3x9m2ab4q@bills.tab.b28.dev`: the group's
+name so people can tell their addresses apart, then a random 10-letter tag,
+the only secret. Mail to it lands in that person's Bills to check, already
+set to that group. Making a new one revokes the old one for that group. Mail
+to the address of a group the person has left goes nowhere. Decided
+2026-10-13 (one per person per group, over one shared per group and one per
+person).
 
 **inbound_messages**: `id`, `provider` (`resend`), `provider_id` (unique, so a
 retried webhook lands once), `user_id` (null until matched), `status`
@@ -582,7 +587,7 @@ is audited like any other.
 
 | Table | select | insert | update | delete |
 |---|---|---|---|---|
-| forwarding_addresses | owner | owner | owner (`revoked_at` only) | none |
+| forwarding_addresses | owner | owner, for a group they're in | owner (`revoked_at` only) | none |
 | inbound_messages | owner | none (webhook only) | none | none |
 | documents | owner; members of the expense's group once kept | owner | owner (`expense_id`, purge: `content` to null with `purged_at`) | none |
 | pending_items | owner | owner | owner | none |

@@ -16,9 +16,10 @@ defmodule TabWeb.InboundControllerTest do
 
   setup do
     scope = user_scope_fixture()
-    {:ok, address} = Inbox.address(scope)
+    {:ok, group} = Tab.Groups.create_group(scope, %{name: "Elm Street"})
+    {:ok, address} = Inbox.address(scope, group.id)
     flush_emails()
-    %{scope: scope, to: Inbox.address_text(address)}
+    %{scope: scope, group: group, to: Inbox.address_text(address)}
   end
 
   # The fixture's sign-in email isn't what these tests are about.
@@ -91,6 +92,8 @@ defmodule TabWeb.InboundControllerTest do
     assert %Message{status: "stored", user_id: uid} = Repo.get!(Message, id)
     assert uid == ctx.scope.user.id
     assert [%Item{source: "email", status: "reading"} = item] = Repo.all(Item)
+    # The address says which group it's for.
+    assert item.group_id == ctx.group.id
     assert_enqueued(worker: ReadWorker, args: %{item_id: item.id})
 
     # The reader gets the text and who sent it.
@@ -131,7 +134,7 @@ defmodule TabWeb.InboundControllerTest do
   end
 
   test "mail to an unknown or retired address writes no item", %{conn: conn} = ctx do
-    {:ok, _} = Inbox.new_address(ctx.scope)
+    {:ok, _} = Inbox.new_address(ctx.scope, ctx.group.id)
 
     for {id, to} <- [{"e_5", "nobody@bills.test"}, {"e_6", ctx.to}, {"e_7", "x@elsewhere.test"}] do
       assert post_event(build_conn(), event(id)).status == 200
@@ -142,6 +145,20 @@ defmodule TabWeb.InboundControllerTest do
     end
 
     _ = conn
+    assert Repo.all(Item) == []
+  end
+
+  test "someone who left the group gets nothing from its address", ctx do
+    Repo.query!("UPDATE memberships SET left_at = now() WHERE user_id = $1", [
+      Ecto.UUID.dump!(ctx.scope.user.id)
+    ])
+
+    assert post_event(build_conn(), event("e_10")).status == 200
+    resend_has("e_10", ctx.to, raw("a@b.com", "bill", "Amount due $5.00"))
+    %Message{id: mid} = Repo.get_by!(Message, provider_id: "e_10")
+    :ok = perform_job(FetchWorker, %{message_id: mid})
+
+    assert Repo.get!(Message, mid).status == "unmatched"
     assert Repo.all(Item) == []
   end
 

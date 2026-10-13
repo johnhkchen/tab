@@ -6,6 +6,7 @@ defmodule Tab.Inbox.PartsTest do
   alias Tab.Inbox.{Email, Mail, Proposal, Resend}
 
   doctest Tab.Inbox.Email
+  doctest Tab.Inbox, only: [local_part: 1]
 
   @today ~D[2026-10-13]
 

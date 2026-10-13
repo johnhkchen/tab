@@ -100,6 +100,12 @@ this repo), **Gotchas**, **Next**.
   usually pays. Built before v0.4.0. The reader gained `current_cents`,
   `previous_cents`, `past_due`, and earliest-start/latest-end periods; rerun
   on the same real bill, 2 of 2 runs got all of them right.
+- Forwarding addresses are per person per group, readable:
+  `<group-name>-<10-letter tag>@bills.tab.b28.dev` (maintainer's pick after
+  `bills@bills...` read badly). Changed the unreleased inbox migration in
+  place and rebuilt dev and test databases. `mix tab.mail.pull --route`
+  routes pulled mail by address, like the webhook. Doppler `tab/dev` has
+  `RESEND_API_KEY` and `TAB_INBOUND_DOMAIN=bills.tab.b28.dev`.
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one
@@ -149,6 +155,8 @@ this repo), **Gotchas**, **Next**.
 - Resend's receiving toggle sits on the domain's own page and only adds its
   MX record once switched on; auto-config adds the sending records first.
   Read the zone through Cloudflare's API when public DNS lookups flake.
+- `MIX_ENV=test mix ecto.reset` runs the seeds into the test database and
+  breaks tests that count rows; use drop, create, migrate instead.
 - `:mimemail.decode/1` calls `:iconv`, which isn't installed; pass
   `encoding: :none` and clean bad UTF-8 ourselves.
 - The `stamp_actor` trigger overwrites `user_id` with the caller, so

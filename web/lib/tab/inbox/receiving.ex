@@ -38,6 +38,29 @@ defmodule Tab.Inbox.Receiving do
     end)
   end
 
+  @doc """
+  Routes a message fetched some other way (`mix tab.mail.pull --route`) the
+  same way the webhook's would be: recorded once, then matched to whoever's
+  address it was sent to. `mail` is what `Tab.Inbox.Resend.fetch/2` returns.
+  """
+  def route(provider_id, mail) do
+    Repo.insert_all(
+      Message,
+      [%{id: Ecto.UUID.generate(), provider: "resend", provider_id: provider_id}],
+      on_conflict: :nothing,
+      conflict_target: [:provider, :provider_id]
+    )
+
+    case Repo.get_by!(Message, provider: "resend", provider_id: provider_id) do
+      %Message{status: "fetching"} = message ->
+        :ok = store(message, mail)
+        Repo.get!(Message, message.id)
+
+      message ->
+        message
+    end
+  end
+
   @doc "Gives up on a message Resend wouldn't hand over."
   def give_up(message_id) do
     Repo.get!(Message, message_id) |> finish(status: "failed", detail: "couldn't be fetched")
@@ -61,11 +84,11 @@ defmodule Tab.Inbox.Receiving do
   defp store(message, mail) do
     base = [from_address: trunc(mail.from, 320), subject: trunc(mail.subject, 500)]
 
-    case user_for(mail.to) do
+    case address_for(mail.to) do
       nil ->
         finish(message, [status: "unmatched"] ++ base)
 
-      user ->
+      {user, group_id} ->
         scope = Scope.for_user(user)
         base = [user_id: user.id] ++ base
 
@@ -79,7 +102,8 @@ defmodule Tab.Inbox.Receiving do
               content_type: "message/rfc822",
               filename: nil,
               data: mail.raw,
-              source: "email"
+              source: "email",
+              group_id: group_id
             }
 
             case Inbox.add(scope, doc) do
@@ -104,8 +128,9 @@ defmodule Tab.Inbox.Receiving do
   defp trunc(nil, _), do: nil
   defp trunc(s, n), do: String.slice(s, 0, n)
 
-  # The first recipient that's a live forwarding address on this server.
-  defp user_for(recipients) do
+  # The first recipient that's a live forwarding address on this server:
+  # `{user, group_id}`, or nil.
+  defp address_for(recipients) do
     domain = Inbox.inbound_domain()
 
     locals =
@@ -123,8 +148,11 @@ defmodule Tab.Inbox.Receiving do
         from a in Address,
           join: u in User,
           on: u.id == a.user_id,
+          # Someone who left the group gets nothing from its address.
+          join: m in "memberships",
+          on: m.group_id == a.group_id and m.user_id == a.user_id and is_nil(m.left_at),
           where: a.local_part in ^locals and is_nil(a.revoked_at),
-          select: u,
+          select: {u, a.group_id},
           limit: 1
       )
     end

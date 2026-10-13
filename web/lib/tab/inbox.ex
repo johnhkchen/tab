@@ -39,35 +39,70 @@ defmodule Tab.Inbox do
     end
   end
 
-  @doc "Whether this server can receive forwarded mail."
-  def mail_enabled?,
-    do:
-      inbound_domain() != nil and
-        Application.get_env(:tab, :resend_webhook_secret) not in [nil, ""]
+  @doc """
+  Whether this server has addresses to forward to. Mail arrives through
+  Resend's webhook (which also needs `RESEND_WEBHOOK_SECRET`) or, in
+  development, `mix tab.mail.pull`.
+  """
+  def mail_enabled?, do: inbound_domain() != nil
 
-  @doc "The person's live address, made the first time it's asked for."
-  def address(%Scope{} = scope) do
+  @doc """
+  The person's live address for a group, made the first time it's asked for.
+  Each person has their own for each group they're in.
+  """
+  def address(%Scope{} = scope, group_id) do
     as_user(scope, fn ->
-      case Repo.one(from a in Address, where: is_nil(a.revoked_at)) do
-        nil -> insert_address()
+      case Repo.one(from a in Address, where: a.group_id == ^group_id and is_nil(a.revoked_at)) do
+        nil -> insert_address(group_id)
         a -> {:ok, a}
       end
     end)
   end
 
-  @doc "Retires the live address and makes a new one. Mail to the old one stops landing."
-  def new_address(%Scope{} = scope) do
+  @doc "Retires the live address for a group and makes a new one. Mail to the old one stops landing."
+  def new_address(%Scope{} = scope, group_id) do
     as_user(scope, fn ->
-      from(a in Address, where: is_nil(a.revoked_at))
+      from(a in Address, where: a.group_id == ^group_id and is_nil(a.revoked_at))
       |> Repo.update_all(set: [revoked_at: now(), updated_at: now()])
 
-      insert_address()
+      insert_address(group_id)
     end)
   end
 
-  defp insert_address do
-    local = :crypto.strong_rand_bytes(15) |> Base.encode32(case: :lower, padding: false)
-    Repo.insert(%Address{local_part: local})
+  defp insert_address(group_id) do
+    with {:ok, group} <- found(Repo.get(Group, group_id)) do
+      Repo.insert(%Address{group_id: group_id, local_part: local_part(group.name)})
+    end
+  end
+
+  @doc ~S"""
+  A readable, private address: the group's name, then a random 10-letter tag.
+  Only the tag keeps strangers out; the name is there so you can tell your
+  addresses apart.
+
+      iex> Regex.match?(~r/^elm-street-house-[a-z2-7]{10}$/, Tab.Inbox.local_part("Elm Street house!"))
+      true
+      iex> Regex.match?(~r/^creme-brulee-[a-z2-7]{10}$/, Tab.Inbox.local_part("Crème brûlée"))
+      true
+      iex> Regex.match?(~r/^group-[a-z2-7]{10}$/, Tab.Inbox.local_part("🏠"))
+      true
+  """
+  def local_part(name) do
+    slug =
+      name
+      |> String.normalize(:nfd)
+      |> String.replace(~r/\p{Mn}/u, "")
+      |> String.downcase()
+      |> String.replace(~r/[^a-z0-9]+/, "-")
+      |> String.slice(0, 40)
+      |> String.trim("-")
+
+    tag =
+      :crypto.strong_rand_bytes(10)
+      |> Base.encode32(case: :lower, padding: false)
+      |> String.slice(0, 10)
+
+    "#{if slug == "", do: "group", else: slug}-#{tag}"
   end
 
   @doc "`local@domain`, or nil when mail isn't set up."
@@ -138,7 +173,12 @@ defmodule Tab.Inbox do
           }
 
           with {:ok, d} <- Repo.insert(document),
-               {:ok, item} <- Repo.insert(%Item{document_id: d.id, source: doc.source}) do
+               {:ok, item} <-
+                 Repo.insert(%Item{
+                   document_id: d.id,
+                   source: doc.source,
+                   group_id: doc[:group_id]
+                 }) do
             {:ok, item}
           end
         end
@@ -380,7 +420,7 @@ defmodule Tab.Inbox do
   defp do_save_reading(scope, item, proposal, sender) do
     as_user(scope, fn ->
       with {:ok, item} <- found(Repo.get(Item, item.id)) do
-        template = match_template(proposal["merchant"], sender)
+        template = match_template(proposal["merchant"], sender, item.group_id)
 
         item
         |> Ecto.Changeset.change(
@@ -389,7 +429,7 @@ defmodule Tab.Inbox do
           proposal: Map.put(proposal, "sender", sender),
           due_on: proposal["due_on"] && Date.from_iso8601!(proposal["due_on"]),
           template_id: template && template.id,
-          group_id: (template && template.group_id) || only_group(),
+          group_id: item.group_id || (template && template.group_id) || only_group(),
           duplicate_of: duplicate(proposal),
           read_at: now()
         )
@@ -427,8 +467,9 @@ defmodule Tab.Inbox do
   end
 
   # By sender first (what someone confirmed before), then by name.
-  defp match_template(merchant, sender) do
+  defp match_template(merchant, sender, group_id) do
     live = from t in Template, where: is_nil(t.deleted_at)
+    live = if group_id, do: where(live, [t], t.group_id == ^group_id), else: live
     domain = Email.domain(sender)
 
     by_sender =

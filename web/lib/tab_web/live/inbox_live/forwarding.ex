@@ -56,28 +56,46 @@ defmodule TabWeb.InboxLive.Forwarding do
         </p>
       </.card>
 
-      <.card :if={@enabled} title="Your Tab address" id="address">
+      <.card :if={@enabled and @addresses == []} id="no-groups">
+        <p class="text-ink-soft">
+          Each group you're in gets its own address.
+          <.link navigate={~p"/groups"} class="underline">Start or join a group</.link>
+          first.
+        </p>
+      </.card>
+
+      <.card
+        :for={{group, address} <- @addresses}
+        :if={@enabled}
+        title={"For #{group.name}"}
+        id={"address-#{group.id}"}
+      >
         <input
-          id="forward-address"
+          id={"forward-#{group.id}"}
           readonly
-          value={@address}
+          value={Inbox.address_text(address)}
           class="tab-field"
           phx-click={JS.dispatch("tab:select")}
         />
         <div class="mt-2 flex flex-wrap gap-2">
-          <.button variant="soft" phx-click={JS.dispatch("tab:copy", to: "#forward-address")}>Copy</.button>
+          <.button variant="soft" phx-click={JS.dispatch("tab:copy", to: "#forward-#{group.id}")}>
+            Copy
+          </.button>
           <.button
             variant="soft"
             phx-click="new_address"
+            phx-value-group={group.id}
             data-confirm="Make a new address? Mail sent to this one stops arriving, so update your filters."
           >
             Make a new one
           </.button>
         </div>
-        <p class="mt-3 text-sm text-ink-soft">
-          Keep it to yourself: anyone who mails it adds to your bills to check. Tab sees what you forward and nothing else.
-        </p>
       </.card>
+
+      <p :if={@enabled and @addresses != []} class="text-sm text-ink-soft" id="keep-private">
+        These addresses are yours: your housemates each get their own. Keep them to yourself, since
+        anyone who mails one adds to your bills to check. Tab sees what you forward and nothing else.
+      </p>
 
       <.card :for={{key, name, steps} <- @steps} :if={@enabled} id={"steps-#{key}"}>
         <details>
@@ -112,17 +130,24 @@ defmodule TabWeb.InboxLive.Forwarding do
     scope = socket.assigns.current_scope
 
     if Inbox.mail_enabled?() do
-      {:ok, address} = Inbox.address(scope)
+      {:ok, groups} = Tab.Groups.list_groups(scope)
+
+      addresses =
+        for g <- groups, is_nil(g.deleted_at) do
+          {:ok, address} = Inbox.address(scope, g.id)
+          {g, address}
+        end
+
       {:ok, mail} = Inbox.recent_mail(scope)
-      assign(socket, enabled: true, address: Inbox.address_text(address), mail: mail)
+      assign(socket, enabled: true, addresses: addresses, mail: mail)
     else
-      assign(socket, enabled: false, address: nil, mail: [])
+      assign(socket, enabled: false, addresses: [], mail: [])
     end
   end
 
   @impl true
-  def handle_event("new_address", _, socket) do
-    {:ok, _} = Inbox.new_address(socket.assigns.current_scope)
+  def handle_event("new_address", %{"group" => group_id}, socket) do
+    {:ok, _} = Inbox.new_address(socket.assigns.current_scope, group_id)
 
     {:noreply,
      socket |> put_flash(:info, "Tab made a new address. Update your filters.") |> load()}

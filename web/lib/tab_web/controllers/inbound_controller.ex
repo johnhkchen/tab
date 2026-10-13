@@ -16,7 +16,7 @@ defmodule TabWeb.InboundController do
     headers = Map.new(conn.req_headers)
 
     cond do
-      not Inbox.mail_enabled?() ->
+      not Inbox.mail_enabled?() or secret in [nil, ""] ->
         send_resp(conn, 404, "")
 
       not Resend.verify(TabWeb.RawBody.get(conn), headers, secret) ->

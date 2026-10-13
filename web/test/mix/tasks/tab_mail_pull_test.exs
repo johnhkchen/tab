@@ -47,7 +47,7 @@ defmodule Mix.Tasks.Tab.Mail.PullTest do
         "/emails/receiving/" <> id ->
           Req.Test.json(conn, %{
             "id" => id,
-            "to" => ["x@bills.test"],
+            "to" => ["House <house-abcdefghij@bills.test>"],
             "raw" => %{"download_url" => "https://downloads.test/raw/#{id}"}
           })
 
@@ -67,7 +67,7 @@ defmodule Mix.Tasks.Tab.Mail.PullTest do
     %{
       "id" => id,
       "from" => "SFPUC <billing@sfwater.example>",
-      "to" => ["x@bills.test"],
+      "to" => ["House <house-abcdefghij@bills.test>"],
       "subject" => "Autopay #{id}",
       "created_at" => at,
       "attachments" => [
@@ -134,6 +134,28 @@ defmodule Mix.Tasks.Tab.Mail.PullTest do
 
     assert {:error, message} = Pull.pull(dir: dir, into: "nobody@example.com")
     assert message =~ "No Tab user"
+  end
+
+  test "--route matches each email to its address's person and group", %{dir: dir} do
+    user = user_fixture()
+    scope = Tab.Accounts.Scope.for_user(user)
+    {:ok, group} = Tab.Groups.create_group(scope, %{name: "House"})
+
+    Repo.insert!(%Tab.Inbox.Address{
+      user_id: user.id,
+      group_id: group.id,
+      local_part: "house-abcdefghij"
+    })
+
+    assert :ok = Pull.pull(dir: dir, route: true)
+    items = Repo.all(Item)
+    assert length(items) == 2
+    assert Enum.all?(items, &(&1.user_id == user.id and &1.group_id == group.id))
+
+    # Pulling again routes nothing twice.
+    File.rm_rf!(dir)
+    assert :ok = Pull.pull(dir: dir, route: true)
+    assert length(Repo.all(Item)) == 2
   end
 
   defp flush do

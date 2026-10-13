@@ -242,8 +242,9 @@ defmodule TabWeb.InboxPagesTest do
   describe "forwarding" do
     test "shows your address, steps, and Gmail's code", %{conn: conn} = ctx do
       {:ok, lv, html} = live(conn, ~p"/inbox/forwarding")
-      {:ok, address} = Inbox.address(ctx.scope)
+      {:ok, address} = Inbox.address(ctx.scope, ctx.group.id)
       assert html =~ Inbox.address_text(address)
+      assert html =~ "For Elm Street"
       assert html =~ "In Gmail"
 
       Repo.insert!(%Message{

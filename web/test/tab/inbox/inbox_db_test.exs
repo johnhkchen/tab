@@ -69,8 +69,8 @@ defmodule Tab.Inbox.InboxDBTest do
 
       run!(
         ctx.owner,
-        "INSERT INTO forwarding_addresses (id, local_part) VALUES ($1, 'abcdefghijklmnopqrstuvwx')",
-        [id]
+        "INSERT INTO forwarding_addresses (id, group_id, local_part) VALUES ($1, $2, 'house-abcdefghij')",
+        [id, ctx.group]
       )
 
       assert count(ctx.owner, "forwarding_addresses") == 1
@@ -80,24 +80,41 @@ defmodule Tab.Inbox.InboxDBTest do
       [[stamped]] = owner!("SELECT user_id::text FROM forwarding_addresses WHERE id = $1", [id])
       assert stamped == ctx.owner
 
-      # Making one "for" someone else makes it yours: the database stamps the maker.
+      # Nobody gets an address for a group they're not in.
+      assert refused?(
+               run(
+                 ctx.stranger,
+                 "INSERT INTO forwarding_addresses (group_id, local_part) VALUES ($1, 'house-bbcdefghij')",
+                 [ctx.group]
+               )
+             )
+
+      # One for the owner's group made "for" the owner by a housemate is the housemate's own.
       theirs = new_id()
 
       run!(
-        ctx.stranger,
-        "INSERT INTO forwarding_addresses (id, user_id, local_part) VALUES ($1, $2, 'bbcdefghijklmnopqrstuvwx')",
-        [theirs, ctx.owner]
+        ctx.housemate,
+        "INSERT INTO forwarding_addresses (id, user_id, group_id, local_part) VALUES ($1, $2, $3, 'house-cbcdefghij')",
+        [theirs, ctx.owner, ctx.group]
       )
 
-      assert [[ctx.stranger]] ==
+      assert [[ctx.housemate]] ==
                owner!("SELECT user_id::text FROM forwarding_addresses WHERE id = $1", [theirs])
+
+      # One live address per person per group.
+      assert {:error, _} =
+               run(
+                 ctx.owner,
+                 "INSERT INTO forwarding_addresses (group_id, local_part) VALUES ($1, 'house-dbcdefghij')",
+                 [ctx.group]
+               )
 
       # The secret part never changes.
 
       assert refused?(
                run(
                  ctx.owner,
-                 "UPDATE forwarding_addresses SET local_part = 'zzcdefghijklmnopqrstuvwx'"
+                 "UPDATE forwarding_addresses SET local_part = 'house-zzcdefghij'"
                )
              )
 
@@ -108,8 +125,12 @@ defmodule Tab.Inbox.InboxDBTest do
                  [id]
                )
 
-      run!(ctx.owner, "UPDATE forwarding_addresses SET revoked_at = now()")
-      assert {:error, _} = run(ctx.owner, "UPDATE forwarding_addresses SET revoked_at = NULL")
+      run!(ctx.owner, "UPDATE forwarding_addresses SET revoked_at = now() WHERE id = $1", [id])
+
+      assert {:error, _} =
+               run(ctx.owner, "UPDATE forwarding_addresses SET revoked_at = NULL WHERE id = $1", [
+                 id
+               ])
     end
   end
 

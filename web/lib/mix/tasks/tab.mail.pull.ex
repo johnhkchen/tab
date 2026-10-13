@@ -16,6 +16,8 @@ defmodule Mix.Tasks.Tab.Mail.Pull do
       outside the repo: these emails hold personal bill details.
     * `--into EMAIL`: also hand each new email to Tab as that person, so it
       shows up in their Bills to check and gets read.
+    * `--route`: also route each new email the way production does, by the
+      forwarding address it was sent to (person and group).
     * `--limit N`: how many to ask Resend for per page (1 to 100).
 
   Never runs in production.
@@ -26,7 +28,7 @@ defmodule Mix.Tasks.Tab.Mail.Pull do
   alias Tab.Inbox
   alias Tab.Inbox.Resend
 
-  @switches [dir: :string, into: :string, limit: :integer]
+  @switches [dir: :string, into: :string, route: :boolean, limit: :integer]
 
   @impl Mix.Task
   def run(args) do
@@ -50,7 +52,8 @@ defmodule Mix.Tasks.Tab.Mail.Pull do
          {:ok, scope} <- scope(opts[:into]),
          {:ok, emails} <- list(opts) do
       File.mkdir_p!(dir)
-      Enum.each(emails, &save(&1, dir, scope))
+      mode = if opts[:route], do: :route, else: scope
+      Enum.each(emails, &save(&1, dir, mode))
       Mix.shell().info("#{length(emails)} emails at Resend; saved in #{dir}")
       :ok
     end
@@ -104,10 +107,10 @@ defmodule Mix.Tasks.Tab.Mail.Pull do
       Mix.shell().info("#{line}  already have")
     else
       case Resend.fetch(id, Inbox.max_bytes(:pdf)) do
-        {:ok, %{raw: raw}} ->
+        {:ok, %{raw: raw} = mail} ->
           File.write!(base <> ".json", Jason.encode!(note(email), pretty: true))
           File.write!(base <> ".eml", raw)
-          Mix.shell().info("#{line}  saved#{hand_over(scope, raw)}")
+          Mix.shell().info("#{line}  saved#{hand_over(scope, id, mail)}")
 
         {:error, reason} ->
           Mix.shell().error("#{line}  couldn't fetch: #{inspect(reason)}")
@@ -130,9 +133,17 @@ defmodule Mix.Tasks.Tab.Mail.Pull do
     }
   end
 
-  defp hand_over(nil, _raw), do: ""
+  defp hand_over(nil, _id, _mail), do: ""
 
-  defp hand_over(scope, raw) do
+  defp hand_over(:route, id, mail) do
+    case Tab.Inbox.Receiving.route(id, mail) do
+      %{status: "stored", kind: "gmail_check"} -> ", Gmail's forwarding code"
+      %{status: "stored"} -> ", routed to its address's Bills to check"
+      %{status: status} -> ", #{status}"
+    end
+  end
+
+  defp hand_over(scope, _id, %{raw: raw}) do
     doc = %{
       kind: "email",
       content_type: "message/rfc822",

@@ -342,14 +342,21 @@ defmodule Tab.InboxTest do
 
   describe "forwarding addresses" do
     test "one live address each; a new one retires the old", ctx do
-      {:ok, a} = Inbox.address(ctx.priya)
-      assert {:ok, %{id: a_id}} = Inbox.address(ctx.priya)
+      {:ok, a} = Inbox.address(ctx.priya, ctx.house.id)
+      assert {:ok, %{id: a_id}} = Inbox.address(ctx.priya, ctx.house.id)
       assert a_id == a.id
-      assert Inbox.address_text(a) =~ ~r/^[a-z2-7]{24}@bills\.test$/
+      assert Inbox.address_text(a) =~ ~r/^elm-street-[a-z2-7]{10}@bills\.test$/
 
-      {:ok, b} = Inbox.new_address(ctx.priya)
+      # Sam gets his own for the same house.
+      {:ok, sams} = Inbox.address(ctx.sam, ctx.house.id)
+      assert sams.local_part != a.local_part
+
+      {:ok, b} = Inbox.new_address(ctx.priya, ctx.house.id)
       assert b.local_part != a.local_part
-      assert {:ok, %{id: b_id}} = Inbox.address(ctx.priya)
+      assert {:ok, %{id: b_id}} = Inbox.address(ctx.priya, ctx.house.id)
+
+      # No address for a group you're not in.
+      assert {:error, _} = Inbox.address(user_scope_fixture(), ctx.house.id)
       assert b_id == b.id
     end
   end
