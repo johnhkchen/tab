@@ -57,6 +57,7 @@ function handle_read(
     let bill = read_bill(r, client = client) catch_all (e) {
         _ => {
             failure = `${e}`;
+            log.warn(`read failed: ${failure}`);
             null
         }
     };

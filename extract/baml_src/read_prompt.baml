@@ -4,7 +4,6 @@ client Haiku = anthropic.Client.new(
     model = "claude-haiku-5-5",
     api_key = env.ANTHROPIC_API_KEY,
     max_tokens = 2000,
-    temperature = 0.0,
 );
 
 enum DocType {

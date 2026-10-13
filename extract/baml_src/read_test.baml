@@ -85,3 +85,8 @@ test "an empty credit balance reads as paused, other failures don't" {
     );
     assert.is_true(!out_of_credit("ai.errors.Timeout: request timed out"))
 }
+
+test "the Haiku client sends no temperature, which Haiku 5.5 refuses" {
+    let req = ReadEmail@spec("", "", "").build_request(client = Haiku);
+    assert.equal(req.body.to_string().index_of("temperature"), null)
+}
