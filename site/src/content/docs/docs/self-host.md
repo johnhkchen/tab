@@ -69,6 +69,31 @@ service you already have.
 | `SMTP_TLS`      | Set to `if_available` only for a local relay that has no TLS.  | (TLS required) |
 | `TAB_MAIL_FROM` | The address Tab's mail comes from. Use one your service lets you send as. | `tab@` your `PHX_HOST` |
 
+## Reading bills
+
+Tab can read photos, PDFs, and forwarded email with Claude. Without these
+settings Tab takes them in, and people fill in each bill by hand beside the
+original.
+
+- **Reading:** make an API key at [platform.claude.com](https://platform.claude.com)
+  and set `ANTHROPIC_API_KEY`. It goes to the `extract` service only. Reading a
+  bill costs less than a tenth of a cent; a statement of several pages, about
+  two tenths of a cent. Set a monthly spending limit on the key in case.
+- **Forwarded email:** Tab receives mail through [Resend](https://resend.com).
+  Add a domain just for this, like `bills.example.com` (not the one your own
+  email uses), turn on **Receiving** on its page, and add the record Resend
+  shows. Then add a webhook for `email.received` pointing at
+  `https://<your PHX_HOST>/inbound/resend`, and set the settings below. Tab
+  must be reachable from the internet for this part.
+
+| Setting                 | What it's for                                                    | Default |
+| ----------------------- | ---------------------------------------------------------------- | ------- |
+| `ANTHROPIC_API_KEY`     | Turns bill reading on (on `extract`).                            | (off)   |
+| `TAB_INBOUND_DOMAIN`    | The domain forwarding addresses live on, like `bills.example.com`. | (none) |
+| `RESEND_WEBHOOK_SECRET` | The webhook's signing secret, from Resend.                       | (none)  |
+| `RESEND_API_KEY`        | Also fetches the mail that arrived. Needs full access.           | (none)  |
+| `TAB_READS_PER_DAY`     | How many documents one person can send for reading each day.     | `30`    |
+
 ## Updating
 
 ```sh

@@ -18,6 +18,12 @@ rows you're not allowed to see.
 - **Nothing is ever deleted behind your back.** Changes are recorded, not erased.
 - **The bill reader can't change anything.** It can only suggest an entry. You
   confirm it before it's added.
+- **Tab doesn't keep your bills.** Once you save or drop one, Tab deletes the
+  photo, PDF, or email and keeps a short note: who sent it, the date, the
+  amount. Until then, nobody else can open it.
+- **Two services see what you send.** Forwarded email passes through Resend,
+  and the bill reader sends each document to Anthropic's Claude to read it.
+  Neither one gets anything else from Tab.
 
 ## How it works
 

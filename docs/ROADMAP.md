@@ -39,7 +39,7 @@ proration, float tracking (days money sits before it's repaid), reminder drafts
 for Venmo, text, and email, and per-recipient statement links.
 Spec: [specification.md §Phase 3](specification.md#phase-3-recurring-bills-and-household-tools).
 
-## Phase 4: Reading bills (done, 2026-10-13, not yet released)
+## Phase 4: Reading bills (done, v0.4.0, 2026-10-13)
 
 Photos, PDFs, and forwarded email, read by the `extract/` service (Claude Haiku
 5.5, one server-wide key) into pending items a person confirms. Forwarded mail
@@ -47,7 +47,7 @@ arrives through Resend inbound webhooks, on self-host and Cloud alike; no in-app
 mail server. Matching bills to phase 3's templates, and the twice-a-month digest.
 Spec: [specification.md §Phase 4](specification.md#phase-4-reading-bills).
 
-## Phase 5: Use Tab from Claude (later)
+## Phase 5: Use Tab from Claude (next)
 
 A remote MCP server with OAuth (Boruta), so people can log expenses and check
 balances from Claude Code or Claude Desktop on their own subscription. Every tool

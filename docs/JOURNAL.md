@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-13: phase 3 released as v0.3.0; phase 4 specified and built
+## 2026-10-13: v0.3.0 and v0.4.0 released; phases 3 and 4 built
 
 ### Done
 - Distilled phase 3 into `docs/specification.md` (commit `eb9fdec`) and built it.
@@ -35,6 +35,11 @@ this repo), **Gotchas**, **Next**.
 - **v0.3.0 released** (commit `e5b5944`, tag `v0.3.0`). Website docs: new
   page `/docs/bills/`, "What works today" updated (it still said 0.1.0), and a
   statement-link line on the privacy page. Site redeployed.
+- **v0.4.0 released** (tag `v0.4.0`): phase 4, reading bills. Website docs:
+  new page `/docs/reading/` ("Send Tab your bills"), a "Reading bills"
+  section on the self-host page (Anthropic key, Resend receiving domain and
+  webhook, settings table), two privacy lines (originals deleted; Resend and
+  Anthropic see what's sent), and "What works today" for 0.4.0.
 - Distilled phase 4 (reading bills) into `docs/specification.md` and built it.
 - Database (`20261013090000_create_inbox.exs`): `forwarding_addresses`,
   `inbound_messages` (written only by the webhook, as the owner),
@@ -206,11 +211,13 @@ this repo), **Gotchas**, **Next**.
   means B owes A back. An overpayment covers A's next share ahead of time.
 
 ### Next
-- Release v0.4.0: bump the four version places, website docs (bills to check,
-  forwarding, and the self-host settings), tag, `site:deploy`.
-- Outside the repo, for Cloud: a Resend receiving domain, the `email.received`
-  webhook pointing at `/inbound/resend`, `RESEND_WEBHOOK_SECRET` in Doppler.
-- Then phase 5 (MCP server).
+- Phase 5 (Use Tab from Claude: MCP server with OAuth): distill its section
+  from `working_specification.md` and ask the maintainer the open calls.
+- Outside the repo, for Cloud (when it launches): the `email.received`
+  webhook on `bills.tab.b28.dev` pointing at `/inbound/resend`,
+  `RESEND_WEBHOOK_SECRET`, `TAB_INBOUND_DOMAIN`, and a full-access
+  `RESEND_API_KEY` in Doppler `tab/prd`; Resend's paid plan once real mail
+  flows (the free plan counts received mail toward 100 a day).
 
 ---
 

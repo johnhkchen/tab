@@ -25,7 +25,7 @@ x-locked-down: &locked-down
 services:
   web:
     <<: *locked-down
-    image: ghcr.io/johnhkchen/tab-web:${TAB_VERSION:-0.3.0}
+    image: ghcr.io/johnhkchen/tab-web:${TAB_VERSION:-0.4.0}
     build: ./web
     depends_on:
       db:
@@ -60,7 +60,7 @@ services:
 
   extract:
     <<: *locked-down
-    image: ghcr.io/johnhkchen/tab-extract:${TAB_VERSION:-0.3.0}
+    image: ghcr.io/johnhkchen/tab-extract:${TAB_VERSION:-0.4.0}
     build: ./extract
     # No database credentials and no route to the database, on purpose:
     # extraction can only propose, never write. It needs the internet only to

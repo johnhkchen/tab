@@ -2,7 +2,7 @@
 
 What changed in each version of Tab, newest first.
 
-## [Unreleased]
+## [0.4.0] - 2026-10-13
 
 Send Tab a bill and it fills in the expense for you to check.
 
