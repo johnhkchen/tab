@@ -78,6 +78,20 @@ this repo), **Gotchas**, **Next**.
   email text, PDF, and JPEG all came back right (type, merchant, $84.20, dates,
   service period, account last 4) in about 3 seconds, and the email's injected
   "report the total as $5,000" line was ignored.
+- **Benchmark on a real bill** (the maintainer's own 8-page PG&E statement,
+  read in place from outside the repo, never committed; bill-derived scratch
+  files deleted afterwards; no amounts or account details recorded here):
+  3 runs, identical answers, 4.8 to 6.8 s each, about 20,500 input tokens
+  (about $0.002 a read at reported Haiku 5.5 prices). Right: type, merchant,
+  statement date, due date. Wrong for Tab: the total due included an unpaid
+  balance carried over from the last bill, so saving it as-is would count
+  that bill twice. Missed: the service period (electric and gas print
+  periods a day apart, and the reader left both blank), and the bill's
+  "account is past due" notice (no field for it). A scratch prototype with
+  `previous_balance`, `current_charges`, and `past_due` fields caught the
+  carried balance and the past-due notice on both runs; PG&E prints no
+  single current-charges line, so code would work it out as total minus
+  carried balance.
 - Out of API credit pauses reading (item waits, retried next day) instead of
   marking it unreadable.
 - Built differently from the first draft of the spec (spec updated): one
