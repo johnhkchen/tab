@@ -173,6 +173,9 @@ defmodule TabWeb.ProfileLive do
       </.card>
 
       <.card title="Your account">
+        <p :if={@plan_line} class="mb-3" id="plan-line">
+          {@plan_line} <.link navigate={~p"/plans"} class="underline">Your plan</.link>
+        </p>
         <div class="flex flex-wrap gap-2">
           <.button variant="soft" navigate={~p"/users/settings"}>Email and password</.button>
           <.button variant="soft" href={~p"/export.csv"}>Download everything (CSV)</.button>
@@ -208,7 +211,8 @@ defmodule TabWeb.ProfileLive do
        method_errors: [],
        kinds: @kinds,
        digest_options: Enum.map(@digests, fn {key, label, _} -> {label, key} end),
-       page_title: "You"
+       page_title: "You",
+       plan_line: plan_line(socket.assigns.current_scope.user.id)
      )
      |> load_connections()}
   end
@@ -322,5 +326,14 @@ defmodule TabWeb.ProfileLive do
         "handle" => m["handle"] || ""
       }
     end)
+  end
+
+  defp plan_line(user_id) do
+    case Tab.Billing.plan(user_id) do
+      %{tier: :self_host} -> nil
+      %{source: :paid, tier: tier} -> "You're on #{tier |> to_string() |> String.capitalize()}."
+      %{source: :trial, until: until} -> "You're trying Plus until #{format_date(until)}."
+      %{tier: :free} -> "You're on Hosted free."
+    end
   end
 end

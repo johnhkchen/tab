@@ -924,7 +924,7 @@ submission links are phase 8.
 | When Plus ends | A cancelled or unpaid subscription stays Plus until its paid period ends, then becomes Hosted free. Nothing is deleted; reading stops. |
 | The trial | Every new Cloud account gets 3 months of trial Plus, no card. One trial per email address, ever: a hash of each address that started a trial is kept, even after the account is deleted. |
 | Asking for more | From two weeks before the trial ends, the You page offers "Ask for 6 more months" with one question: the first time, "What do you use Tab for?"; after that, "Would you write a few words we can quote? (Honest is fine, and you can say no.)" The maintainer grants requests on the admin page; granting adds 6 months of trial Plus and emails the person. Repeats without limit. A quote is never required to be kind, and any one published says the writer got free months. |
-| Who can sign up | Anyone, up to `TAB_SIGNUPS_PER_DAY` new accounts a day (default 50). Past it, the sign-in page says Tab is full for today and to try tomorrow; existing accounts sign in as usual. Decided 2026-10-16. |
+| Who can sign up | Anyone, up to `TAB_SIGNUPS_PER_DAY` new accounts a day (default 50), counting accounts whose first sign-in was today. Past it, no link goes to a new address, and the sign-in page tells everyone the same thing (check your email; if you're new, Tab is full today), so it never reveals who has an account; existing accounts sign in as usual. Decided 2026-10-16. |
 | The admin page | `/admin`, only for addresses in `TAB_ADMIN_EMAILS`. Shows: extension requests with their answers and a Grant button; counts of accounts, trials, and paid Plus; documents read this month with an estimated cost; forwarded emails today against Resend's 100. Never shows a group, an expense, a bill, or anyone's ledger. Decided 2026-10-16. |
 | Deleting an account | "Delete my account" on the You page, on every edition. Deleted: email, name, password, sessions, payment handles, forwarding addresses, Claude connections, bills to check and their documents, private expenses and their audit entries. Kept: shared expenses and payments, shown under "Former member", so housemates' balances stay right. They leave every group. Tab suggests settling up first but doesn't require it. A Paddle subscription is cancelled at once and refunded if within 30 days. This is the one exception to "no hard deletes", done by one database function. Decided 2026-10-16. |
 | Legal pages | Plain-language Terms, Refunds, and an expanded Privacy page on the website, which Paddle needs before approving the account. Drafted in the repo; the maintainer reads them before they go to Paddle. |
@@ -946,7 +946,9 @@ submission links are phase 8.
 **billing_accounts**: `user_id` (pk), `paid_plan` (`plus` \| `pro`, null when
 none), `paid_until`, `paddle_customer_id`, `paddle_subscription_id`,
 `subscription_status` (Paddle's), `trial_until`, `warned_month` (the month
-the 80% email went out). Made for each new account on Cloud. A person's plan
+the 80% email went out), `subscription_event_at` (the newest Paddle event
+applied). Made at a person's first sign-in on Cloud, so addresses nobody
+confirms never get one. A person's plan
 is worked out, never stored: paid Plus when `paid_until` is in the future,
 else trial Plus when `trial_until` is, else Hosted free.
 
@@ -961,8 +963,9 @@ else trial Plus when `trial_until` is, else Hosted free.
 `payload` (jsonb), `processed_at`. The webhook writes the event and applies it
 in one transaction, so a repeated event changes nothing.
 
-**reads**: `id`, `user_id`, `document_id`, `paid` (boolean), `read_on` (date).
-One row per document sent to the reader on Cloud, counted for allowances and
+**reads**: `id`, `user_id`, `document_id` (unused for now), `paid` (boolean),
+`read_on` (date). One row per call to the reader on Cloud that reached the
+model (read, or couldn't make sense of it), counted for allowances and
 the admin page's estimate. Kept after the document is purged; dropped with
 the account.
 
@@ -1005,7 +1008,7 @@ current period end; events arriving out of order are applied by
 - **Bills to check:** on Hosted free, "Tab reads bills on Plus" with a link to
   Plans; at the limit, "Reading paused until Nov 1".
 - **Admin** (`/admin`): as above.
-- **Website:** Terms, Refunds, the Privacy page (Paddle as merchant of record,
+- **Website:** Terms (`/docs/terms/`), Refunds (`/docs/refunds/`), the Privacy page (Paddle as merchant of record,
   what deleting an account removes), pricing copy without the own-key line,
   and Pro marked "Opens later".
 

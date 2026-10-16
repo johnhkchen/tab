@@ -70,12 +70,24 @@ defmodule TabWeb.Dev.NarrowController do
       item && ~p"/groups/#{group}/expenses/new?item=#{item.id}",
       ~p"/profile",
       consent,
+      # Hosted Tab's pages: run with TAB_EDITION=cloud (and TAB_ADMIN_EMAILS
+      # including the demo person for /admin).
+      cloud_path(scope, ~p"/plans"),
+      cloud_path(scope, ~p"/admin"),
       ~p"/users/settings",
       ~p"/welcome",
       ~p"/join/not-a-real-token",
       ~p"/users/log-in"
     ]
     |> Enum.reject(&is_nil/1)
+  end
+
+  defp cloud_path(scope, path) do
+    cond do
+      not Tab.Billing.cloud?() -> nil
+      path == "/admin" and not Tab.Billing.admin?(scope) -> nil
+      true -> with(:ok <- Tab.Billing.start(scope.user), do: path)
+    end
   end
 
   # The consent page needs a real client; the You page shows its connection.

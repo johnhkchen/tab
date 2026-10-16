@@ -21,6 +21,10 @@ defmodule TabWeb.InboxLive.Index do
         </:subtitle>
       </.header>
 
+      <p :if={@reading_note} class="clay-well mb-4 p-4 text-sm" id="reading-note">
+        {@reading_note} <.link navigate={~p"/plans"} class="underline">Your plan</.link>
+      </p>
+
       <.card title="Add a bill" id="add">
         <form id="upload_form" phx-change="validate" phx-submit="noop">
           <.live_file_input upload={@uploads.bills} class="sr-only" />
@@ -131,6 +135,7 @@ defmodule TabWeb.InboxLive.Index do
      socket
      |> assign(
        page_title: "Bills to check",
+       reading_note: reading_note(socket.assigns.current_scope.user.id),
        digest_days: profile.digest_days,
        today: Date.utc_today()
      )
@@ -219,4 +224,18 @@ defmodule TabWeb.InboxLive.Index do
     do: "Fill it in by hand (#{note || "couldn't read it"})"
 
   defp status(%{status: "ready"}), do: "Ready to check"
+
+  # Hosted Tab: say up front when Tab won't read what's added.
+  defp reading_note(user_id) do
+    case Tab.Billing.may_read(user_id) do
+      {:error, :no_plan} ->
+        "Tab reads bills on Plus. You can still add bills here and fill them in yourself."
+
+      {:error, {:limit, resumes_on}} ->
+        "Tab has read this month's bills for your plan. New ones wait until #{format_date(resumes_on)}, or fill them in yourself."
+
+      _ ->
+        nil
+    end
+  end
 end

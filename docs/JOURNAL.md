@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-16: v0.5.0 released; phase 5 built; phase 6 specified
+## 2026-10-16: v0.5.0 released; phase 5 built; phase 6 specified and mostly built
 
 ### Done
 - Distilled phase 5 ("Use Tab from Claude") from the long-form spec §8 into
@@ -50,6 +50,25 @@ this repo), **Gotchas**, **Next**.
 - 445 web tests (was 416), including the policy matrix for the four tables
   and an end-to-end flow over HTTP. A live dev server answers discovery and
   registration correctly.
+
+- Phase 6, built without anything from John (all dark unless
+  `TAB_EDITION=cloud`):
+  - Delete my account (every edition): `ledger.forget_user` in migration
+    `20261016130000_forget_user.exs`; the audit log's append-only trigger
+    allows deleting only the forgotten person's private entries.
+  - `Tab.Billing` (migration `20261016125000_create_billing.exs`): plans from
+    dates, the 3-month trial once per address (hash kept after deletion),
+    the daily sign-up limit, monthly reading allowances with the 80% email,
+    lower read priority for trials, asking for more and granting it.
+  - `Tab.Billing.Paddle`: the signed webhook at `/paddle/webhook`, the
+    customer portal link, and cancel-plus-refund when an account is deleted.
+  - Pages: `/plans` (Paddle.js checkout), `/admin`, the plan line on the You
+    page, the reading note on Bills to check.
+  - Website (not deployed): Terms and Refunds drafts with two blanks for John
+    (contact email, governing law), a Hosted Tab section on Privacy, pricing
+    copy without the own-key line and with Pro "Opens later".
+  - 481 web tests (was 445); 360 px check passes, including `/plans` and `/admin` with
+    `TAB_EDITION=cloud TAB_ADMIN_EMAILS=priya@example.com`.
 
 ### Decided
 - Phase 6 specified (`docs/specification.md` §Phase 6). Hosted Tab ships in
@@ -112,9 +131,11 @@ this repo), **Gotchas**, **Next**.
 ### Next
 1. Optional: click through Connect with real Claude Code once
    (`claude mcp add --transport http tab-dev http://localhost:4000/mcp`).
-2. Build phase 6. Before Paddle can go live, John: create the Paddle account
-   (sandbox first; approval takes days), a standard Anthropic API key for
-   Cloud, and SSH access to the Hetzner server for the deploy.
+2. John: fill the two blanks in `site/src/content/docs/docs/terms.md` and
+   `refunds.md` and read both; then deploy the site.
+3. John: Paddle account (sandbox first), a standard Anthropic API key for
+   Cloud, SSH access to the Hetzner server. Then: a sandbox checkout end to
+   end, the deploy checklist, WAL to R2, the restore runbook.
 
 ---
 

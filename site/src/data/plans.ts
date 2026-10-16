@@ -22,7 +22,7 @@ export const plans: readonly Plan[] = [
 		name: 'Hosted free',
 		price: '$0. No card needed',
 		description:
-			'Everything except bill reading, hosted by us. Want bill reading? Add your own AI key, same as running it yourself.',
+			'Everything in Tab except bill reading, hosted by us. Add bills and forward them, and fill them in yourself.',
 	},
 	{
 		name: 'Plus',
@@ -34,6 +34,6 @@ export const plans: readonly Plan[] = [
 		name: 'Pro',
 		price: '$24 a year',
 		description:
-			"For landlords and anyone billing other households. Everything in Plus, and: see what each household owes you (or you owe them) in one place, pay back repair costs from there, and split one bill across several properties. Your households don't pay anything.",
+			"Opens later. For landlords and anyone billing other households. Everything in Plus, and: see what each household owes you (or you owe them) in one place, pay back repair costs from there, and split one bill across several properties. Your households don't pay anything.",
 	},
 ];

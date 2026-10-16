@@ -93,6 +93,10 @@ defmodule TabWeb.Router do
       live "/inbox/:id", InboxLive.Show, :show
 
       live "/oauth/authorize", OAuthLive.Authorize, :show
+
+      # Hosted Tab only; both are 404 on self-host.
+      live "/plans", PlansLive, :show
+      live "/admin", AdminLive, :show
     end
 
     get "/documents/:id", DocumentController, :show

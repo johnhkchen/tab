@@ -27,6 +27,21 @@ rows you're not allowed to see.
 - **Claude gets in only if you connect it.** It sees what you see and nothing
   more, and you can disconnect it on your You page.
 
+## On Hosted Tab
+
+- **Paddle handles payments.** It sees your name, email, card, and address
+  for billing and tax. Tab never sees your card, and Paddle never sees your
+  expenses.
+- **Your plan, not your ledger.** The person who runs Hosted Tab sees how
+  many accounts there are, how many bills were read, and the answers people
+  send when they ask for more trial time. The admin page never shows a group,
+  an expense, or a bill.
+- **Deleting your account** removes your email, name, payment handles, bills,
+  private spending, and Claude connections, and takes you out of every group.
+  Shared expenses stay with each group under "Former member", so the balances
+  stay right. A hash of your email stays, so a new account can't start a
+  second free trial; it can't be turned back into your address.
+
 ## How it works
 
 Every time you use Tab, the app asks the database for data *as you*. The database

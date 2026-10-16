@@ -48,6 +48,8 @@ export default defineConfig({
 				{ label: 'Bills, time away, and asking for it', slug: 'docs/bills' },
 				{ label: 'Run it yourself', slug: 'docs/self-host' },
 				{ label: 'How your privacy is kept', slug: 'docs/privacy' },
+				{ label: 'Terms', slug: 'docs/terms' },
+				{ label: 'Refunds', slug: 'docs/refunds' },
 			],
 		}),
 	],
