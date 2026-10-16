@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-16: Phase 5 specified and built
+## 2026-10-16: v0.5.0 released; phase 5 specified and built
 
 ### Done
 - Distilled phase 5 ("Use Tab from Claude") from the long-form spec §8 into
@@ -44,6 +44,9 @@ this repo), **Gotchas**, **Next**.
 - That check found a bug: the 401 challenge named only `tab:read`, and
   clients ask for the challenge's scopes, so every connection came out
   read-only. The challenge now names both; the tick box decides. Test added.
+- **v0.5.0 released** (tag `v0.5.0`): phase 5. Website redeployed with
+  `/docs/claude/`, the `TAB_MCP` row, the privacy line, and "What works
+  today" at 0.5.0.
 - 445 web tests (was 416), including the policy matrix for the four tables
   and an end-to-end flow over HTTP. A live dev server answers discovery and
   registration correctly.
@@ -89,8 +92,9 @@ this repo), **Gotchas**, **Next**.
   rotation for public clients; token endpoints get 10 seconds.
 
 ### Next
-1. Release v0.5.0 and deploy the site. The browser click with real Claude
-   Code can happen whenever John has a moment.
+1. Optional: click through Connect with real Claude Code once
+   (`claude mcp add --transport http tab-dev http://localhost:4000/mcp`).
+2. Pick the next phase: Google sign-in and passkeys, or phase 6 (Hosted Tab).
 
 ---
 

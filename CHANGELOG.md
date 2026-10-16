@@ -2,6 +2,28 @@
 
 What changed in each version of Tab, newest first.
 
+## [0.5.0] - 2026-10-16
+
+Ask Claude what you owe, or tell it what you spent.
+
+### Added
+- Use Tab from Claude: connect Claude Code, Claude Desktop, or claude.ai, sign
+  in to Tab in your browser, and Claude can look up your groups, balances,
+  recent expenses, the fewest payments to settle up, and your bills to check.
+  It runs on your own Claude plan.
+- Claude can add expenses (any split Tab has) and record payments, if you
+  leave the box ticked when you connect. Everything it adds says "from
+  Claude", and your housemates get the usual emails. A payment to a housemate
+  still waits for them to confirm it. Claude can't edit, delete, or confirm
+  anything.
+- Claude sees what you see in Tab and nothing more: the database checks each
+  request against your own account, as it does for the web pages.
+- The You page lists each connection, when it was last used, and a
+  Disconnect button that stops it at once.
+- Self-hosting: on by default. Claude Code works from your own network;
+  Claude Desktop and claude.ai need Tab on a public https address. Set
+  `TAB_MCP=off` to turn it off.
+
 ## [0.4.0] - 2026-10-13
 
 Send Tab a bill and it fills in the expense for you to check.
