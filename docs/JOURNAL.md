@@ -112,6 +112,11 @@ this repo), **Gotchas**, **Next**.
   passed over: one Docker setup for every app loses per-project isolation.
 
 ### State of the world
+- GitHub: new private repo `johnhkchen/b28-infra` (Pulumi, TypeScript):
+  the shared server and a slot per project, Tab first. Not run yet: needs a
+  Hetzner account and token, the R2 bucket `b28-infra-state` with an S3 token,
+  Cloudflare DNS and R2 edit on the token, the Doppler project `b28-infra`,
+  and the SSH public key in `Pulumi.prod.yaml` (see its README).
 - Nothing outside the repo changed.
 
 ### Gotchas
