@@ -774,7 +774,7 @@ exactly as it does on the web.
 | `POST /oauth/token` | Form-encoded. `authorization_code` (with `code_verifier` and `resource`) and `refresh_token`. Answers within 10 seconds. |
 | `POST /oauth/register` | DCR. Public clients only (`token_endpoint_auth_method: none`). Limited to 20 a day per IP. |
 | `POST /oauth/revoke` | RFC 7009, for clients that disconnect themselves. |
-| `/mcp` | Streamable HTTP, POST only (GET and DELETE get 405), one JSON body per request, no sessions. Versions 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26; anything else gets `-32022` with the list. No or bad token: 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="tab:read"`. Missing scope: 403 `insufficient_scope` with `scope="tab:write"`. An `Origin` other than Tab's own or `https://claude.ai` gets 403. |
+| `/mcp` | Streamable HTTP, POST only (GET and DELETE get 405), one JSON body per request, no sessions. Versions 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26; anything else gets `-32022` with the list. No or bad token: 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="tab:read tab:write"` (clients request the scopes the challenge names, so naming only read would make every connection read-only; the consent page's tick box is where the person chooses). Missing scope: 403 `insufficient_scope` with `scope="tab:write"`. An `Origin` other than Tab's own or `https://claude.ai` gets 403. |
 
 Rules the endpoints enforce:
 

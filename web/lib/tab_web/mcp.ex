@@ -84,7 +84,9 @@ defmodule TabWeb.MCP do
         {:halt,
          fn conn ->
            conn
-           |> put_resp_header("www-authenticate", challenge("tab:read") <> error)
+           # Both scopes: clients ask for what the challenge names, and the
+           # consent page's tick box is where the person picks read only.
+           |> put_resp_header("www-authenticate", challenge("tab:read tab:write") <> error)
            |> send_resp(401, "")
          end}
     end

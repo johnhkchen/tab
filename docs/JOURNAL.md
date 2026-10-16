@@ -34,7 +34,17 @@ this repo), **Gotchas**, **Next**.
 - Docs page `/docs/claude/` ("Use Tab from Claude"), a `TAB_MCP` row on the
   self-host page, a privacy line, and "What works today" says 0.5.0 (site not
   deployed yet; that waits for the release).
-- 444 web tests (was 416), including the policy matrix for the four tables
+- Checked with real clients instead of by hand: Tab fetched Claude Code's
+  real metadata document (`https://claude.ai/oauth/claude-code-client-metadata`,
+  loopback callbacks with no port, `max-age=300`) over pinned TLS, and the
+  official MCP TypeScript SDK (1.32.1) ran the whole flow against a dev server
+  with CIMD and with DCR: discovery from the 401, PKCE, `iss`, tokens, then
+  `tools/list` and tool calls on 2025-11-25. A script stood in for the
+  Connect click. Only the browser click itself is untested.
+- That check found a bug: the 401 challenge named only `tab:read`, and
+  clients ask for the challenge's scopes, so every connection came out
+  read-only. The challenge now names both; the tick box decides. Test added.
+- 445 web tests (was 416), including the policy matrix for the four tables
   and an end-to-end flow over HTTP. A live dev server answers discovery and
   registration correctly.
 
@@ -79,8 +89,8 @@ this repo), **Gotchas**, **Next**.
   rotation for public clients; token endpoints get 10 seconds.
 
 ### Next
-1. Check by hand with real Claude Code against the dev server (the spec's
-   last phase 5 check), then release v0.5.0 and deploy the site.
+1. Release v0.5.0 and deploy the site. The browser click with real Claude
+   Code can happen whenever John has a moment.
 
 ---
 

@@ -123,7 +123,7 @@ defmodule TabWeb.MCPTest do
     assert challenge =~
              ~s(resource_metadata="#{OAuth.issuer()}/.well-known/oauth-protected-resource/mcp")
 
-    assert challenge =~ ~s(scope="tab:read")
+    assert challenge =~ ~s(scope="tab:read tab:write")
 
     prm = build_conn() |> get("/.well-known/oauth-protected-resource/mcp") |> json_response(200)
     assert prm["resource"] == OAuth.resource()
@@ -134,6 +134,16 @@ defmodule TabWeb.MCPTest do
     assert as["client_id_metadata_document_supported"] == true
     assert as["token_endpoint_auth_methods_supported"] == ["none"]
     assert as["authorization_response_iss_parameter_supported"] == true
+  end
+
+  test "a client asking for the challenge's scopes gets the write box" do
+    conn = post(build_conn(), "/mcp", %{jsonrpc: "2.0", id: 1, method: "tools/list"})
+    [challenge] = get_resp_header(conn, "www-authenticate")
+    [_, scope] = Regex.run(~r/scope="([^"]+)"/, challenge)
+    {_verifier, code_challenge} = pkce()
+
+    assert {:ok, %{scopes: ["tab:read", "tab:write"]}} =
+             OAuth.check_request(authorize_params(@cimd, code_challenge, %{"scope" => scope}))
   end
 
   test "a CIMD client signs in and calls a tool", %{priya_scope: scope} do
