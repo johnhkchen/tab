@@ -8,6 +8,52 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
+## 2026-10-16: Phase 5 specified
+
+### Done
+- Distilled phase 5 ("Use Tab from Claude") from the long-form spec §8 into
+  `docs/specification.md`: decisions, configuration, endpoints, four OAuth
+  tables with policies, seven tools, the You page section, and the tests that
+  must pass before phase 6. ROADMAP points at it.
+- Checked what Claude's clients and the libraries support today (sources:
+  modelcontextprotocol.io authorization spec 2026-07-28, claude.com connector
+  authentication docs, Boruta's changelog, anubis_mcp docs).
+
+### Decided
+- Tab runs its own small OAuth 2.1 server instead of Boruta. Boruta 2.3.8 has
+  no resource indicators (RFC 8707, required by MCP) and no client ID metadata
+  documents; its 3.0 line has been beta since 2025.
+- Registration: CIMD first, DCR as fallback. PKCE S256 only; tokens bound to
+  `https://<host>/mcp`; 1-hour access tokens, 30-day rotating refresh tokens.
+- Two scopes, `tab:read` and `tab:write`; the consent page's write box is
+  ticked by default.
+- Claude's writes save at once with `via = 'claude'` ("Added from Claude");
+  no editing, deleting, or confirming through Claude in phase 5.
+- Tools: list_groups, get_balances, list_recent_expenses, suggest_settle_up,
+  list_bills_to_check, add_expense, record_payment.
+- MCP library: `anubis_mcp` (Hermes's successor), with a hand-written plug as
+  the way out.
+
+### State of the world
+- Nothing outside the repo changed.
+
+### Gotchas
+- claude.ai and Desktop connect from Anthropic's servers (`160.79.104.0/21`),
+  so they need Tab on public HTTPS. Claude Code connects from the person's own
+  machine and uses a loopback callback on a random port: match loopback
+  redirects with any port.
+- claude.ai picks CIMD only when the metadata advertises
+  `client_id_metadata_document_supported: true` and `none` in
+  `token_endpoint_auth_methods_supported`; otherwise DCR.
+- Claude refreshes tokens up to 5 minutes early and expects refresh-token
+  rotation for public clients; token endpoints get 10 seconds.
+
+### Next
+1. Build phase 5: migration for the OAuth tables and `via`, then `Tab.OAuth`,
+   then the `/mcp` tools, then the You page and docs.
+
+---
+
 ## 2026-10-13: v0.3.0 and v0.4.0 released; phases 3 and 4 built
 
 ### Done

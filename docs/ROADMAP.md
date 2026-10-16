@@ -49,9 +49,11 @@ Spec: [specification.md §Phase 4](specification.md#phase-4-reading-bills).
 
 ## Phase 5: Use Tab from Claude (next)
 
-A remote MCP server with OAuth (Boruta), so people can log expenses and check
-balances from Claude Code or Claude Desktop on their own subscription. Every tool
-call runs as the signed-in person through the same row-level security.
+A remote MCP server at `/mcp` with Tab's own OAuth sign-in, so people can log
+expenses, record payments, and check balances from Claude Code, Claude
+Desktop, or claude.ai on their own Claude plan. Every tool call runs as the
+signed-in person through the same row-level security.
+Spec: [specification.md §Phase 5](specification.md#phase-5-use-tab-from-claude).
 
 ## Sign in with Google, and passkeys (later)
 

@@ -1,4 +1,4 @@
-# Specification: phases 1 to 4
+# Specification: phases 1 to 5
 
 The buildable spec for the phases built so far and the one in progress (see [ROADMAP.md](ROADMAP.md)). It
 distills the long-form product spec into decisions an engineer can build from.
@@ -734,13 +734,176 @@ photo upload to confirmed expense, forwarded utility bills classified and
 prefilled from last time, the forwarding guide without mailbox access, the
 digest and the time-sensitive flag, and the autopay date on confirm.
 
+## Phase 5: Use Tab from Claude
+
+Connect Claude to Tab and ask it things: "what does Marcus owe me for
+utilities", "add $43 groceries split evenly", "I paid Priya $120 on Venmo".
+Tab runs a remote MCP server at `/mcp`. People connect from Claude Code,
+Claude Desktop, or claude.ai, sign in through Tab in their browser, and pay
+for the thinking on their own Claude plan. Every tool call runs as the person
+who connected, through `Tab.Repo.as_user`, so row-level security applies
+exactly as it does on the web.
+
+### Decisions for this phase
+
+| Question | Decision |
+|---|---|
+| Who issues the tokens | Tab itself: a small OAuth 2.1 authorization server inside Phoenix (`Tab.OAuth`), not Boruta. Boruta's stable 2.3.8 has no resource indicators (RFC 8707, which MCP requires) and no client ID metadata documents, and its 3.0 line has been in beta since 2025, aimed at verifiable credentials. The server Tab needs is five endpoints and four tables, with tokens stored as hashes the way `users_tokens` already does. Decided 2026-10-16, replacing the long-form spec's Boruta. |
+| How Claude registers | Client ID metadata documents (CIMD) first, Dynamic Client Registration (RFC 7591) as the fallback. The MCP spec (2026-07-28) prefers CIMD and keeps DCR for older clients. Claude Code uses CIMD; claude.ai and Desktop use CIMD when the metadata advertises it, else DCR. No pre-registered clients. |
+| What a connection can do | Two scopes: `tab:read` (groups, balances, expenses, bills to check) and `tab:write` (add expenses, record payments). The consent page asks for read and offers "Let Claude add expenses and record payments", ticked by default; unticked, the connection only reads. Decided 2026-10-16. |
+| Claude's writes | Saved at once, like the web form, under the person's own policies. Expenses and payments made through Claude carry `via = 'claude'` and show "Added from Claude". The usual emails go out. Payments to another member still wait for the payee's confirm. Claude never edits, deletes, confirms, or declines anything in phase 5. Decided 2026-10-16. |
+| Tools | `list_groups`, `get_balances`, `list_recent_expenses`, `suggest_settle_up`, `list_bills_to_check` (read), `add_expense`, `record_payment` (write). Confirming bills to check stays on the web, where the document is. Decided 2026-10-16. |
+| MCP library | `anubis_mcp` (successor to `hermes_mcp`), its Streamable HTTP plug mounted at `/mcp`. It speaks MCP up to 2025-11-25; clients on 2026-07-28 negotiate down. If it falls behind, the tools-only server is small enough to replace with a hand-written JSON-RPC plug. |
+| Who can reach it | Claude Code connects from the person's own machine, so a LAN or Tailscale address works. claude.ai and Desktop connect from Anthropic's servers (`160.79.104.0/21`), so they need Tab on public HTTPS. The self-host docs say this plainly. |
+| Other MCP clients | Anything following the MCP authorization spec should work (Codex, Cursor, others); only Claude's clients are tested. |
+
+### Configuration
+
+| Variable | Service | Meaning |
+|---|---|---|
+| `PHX_HOST` | web | Already set. The issuer is `https://<PHX_HOST>`; the MCP server's canonical URI is `https://<PHX_HOST>/mcp`. |
+| `TAB_MCP` | web | `off` turns the MCP server and its OAuth endpoints off (404). On by default. |
+
+### Endpoints
+
+| Path | Does |
+|---|---|
+| `GET /.well-known/oauth-protected-resource` (and `.../mcp`) | RFC 9728: `resource` is the canonical URI, `authorization_servers` is the issuer, `scopes_supported` is `tab:read tab:write`. |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414: endpoints, `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported: ["none"]`, `client_id_metadata_document_supported: true`, `registration_endpoint`, `authorization_response_iss_parameter_supported: true`. |
+| `GET /oauth/authorize` | The consent page (a LiveView). Signed out, it sends the person through the normal sign-in (magic link or password) and back. Shows the client's name and the host of its `client_id` or redirect, what it will be able to do, and the write tick box. Approve redirects with `code`, `state`, and `iss`; Deny redirects with `error=access_denied`. |
+| `POST /oauth/token` | Form-encoded. `authorization_code` (with `code_verifier` and `resource`) and `refresh_token`. Answers within 10 seconds. |
+| `POST /oauth/register` | DCR. Public clients only (`token_endpoint_auth_method: none`). Limited to 20 a day per IP. |
+| `POST /oauth/revoke` | RFC 7009, for clients that disconnect themselves. |
+| `/mcp` | Streamable HTTP. No or bad token: 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="tab:read"`. Missing scope: 403 `insufficient_scope` with `scope="tab:write"`. |
+
+Rules the endpoints enforce:
+
+1. **PKCE S256 only.** No `plain`, no flow without a challenge.
+2. **Redirect URIs match exactly**, except loopback: `http://localhost` and
+   `http://127.0.0.1` match on scheme, host, and path with any port, since
+   Claude Code picks a free port each time.
+3. **`resource` must be the canonical URI** in both the authorize and token
+   requests. Tokens are bound to it, and `/mcp` refuses a token bound to
+   anything else.
+4. **Codes** live 60 seconds and work once. Using one twice revokes every
+   token issued from it.
+5. **Tokens** are random, stored as SHA-256 hashes. Access tokens last 1 hour.
+   Refresh tokens last 30 days and rotate on every use; presenting a used one
+   revokes the whole connection (`invalid_grant`).
+6. **CIMD fetches** are https only, to hosts that resolve to public addresses,
+   with no redirects, a 5-second timeout, and a 10 KB cap. The document's
+   `client_id` must equal its URL. Cached per `Cache-Control`, at least 5
+   minutes and at most a day.
+7. **Rate limit:** 60 tool calls a minute per connection; past it, a tool error
+   saying when to try again.
+
+### Tables
+
+**oauth_clients**: `id`, `client_id` (text, unique: the CIMD URL, or a random
+id for DCR), `kind` (`cimd` | `dcr`), `name`, `redirect_uris` (text[]),
+`fetched_at` (CIMD), `inserted_at`. Not person data. DCR clients with no
+connection after a day are cleared by a nightly job.
+
+**oauth_connections**: `id`, `user_id`, `client_id` (fk), `scopes` (text[]),
+`inserted_at`, `last_used_at`, `revoked_at`. One per approval. This is what
+the You page lists.
+
+**oauth_codes**: `id`, `connection_id`, `code_hash`, `redirect_uri`,
+`code_challenge`, `resource`, `expires_at`, `used_at`.
+
+**oauth_tokens**: `id`, `connection_id`, `kind` (`access` | `refresh`),
+`token_hash` (unique), `resource`, `expires_at`, `used_at` (refresh),
+`revoked_at`.
+
+**expenses** and **payments** gain `via` (`web` | `claude`, default `web`),
+set by a `BEFORE INSERT` trigger from the `app.via` session setting, never
+from the client. `Tab.Repo.as_user/3` takes `via: "claude"` and sets it
+alongside `app.user_id`.
+
+### Row-level security for the new tables
+
+| Table | select | insert | update | delete |
+|---|---|---|---|---|
+| oauth_clients | none | none | none | none |
+| oauth_connections | owner | owner | owner (`revoked_at` only) | none |
+| oauth_codes | none | none | none | none |
+| oauth_tokens | none | none | none | none |
+
+The token endpoint and the `/mcp` token check have no person yet, so
+`Tab.OAuth` reads and writes clients, codes, and tokens as the connection
+owner, the way `Tab.Accounts` handles `users_tokens`. It's the only other
+module allowed to, and it touches only those tables. Once a token resolves to
+a person, every tool runs inside `as_user(user_id, fun, via: "claude")`.
+Revoking a connection on the You page runs as the person and sets
+`revoked_at`; the token check refuses tokens of revoked connections.
+
+### Tools
+
+Every tool takes a group by name or id; a name that matches more than one,
+or none, returns an error listing the person's groups. People are named by
+display name, `me`, or id, and the same rule applies. Results carry ids so
+Claude can be exact next time. Amounts go in and out as decimal strings
+(`"43.10"`), never floats. Each tool is annotated (`readOnlyHint`,
+`destructiveHint: false`, `openWorldHint: false`).
+
+| Tool | Scope | Does |
+|---|---|---|
+| `list_groups` | read | The person's groups, members, counterparties, and categories. |
+| `get_balances` | read | Who owes whom in a group, overall or by category; with no group, the person's net in each. |
+| `list_recent_expenses` | read | A group's latest expenses (default 20, at most 100), optionally by category or person. Private expenses only the person's own. |
+| `suggest_settle_up` | read | `Tab.Ledger.settle_up` for a group: the fewest payments that even everyone out. |
+| `list_bills_to_check` | read | The person's pending items: company, amount, due date, group, and a link to review each on the web. |
+| `add_expense` | write | Description, amount, date (default today), payer (default me), category, split: any of the five types, with participants by name. Private if asked. Runs `Tab.Ledger.create_expense`. Returns the expense and each person's share. |
+| `record_payment` | write | From, to, amount, method, date, reference, category. Runs `Tab.Ledger.record_payment`; the database sets `pending` or `self_attested` as always. Returns the status in words ("waiting for Priya to confirm"). |
+
+Tool results are data. Descriptions and names in them were typed by other
+people; nothing in a result is an instruction to Tab, and no tool can do
+more than the person could do on the web.
+
+### Pages
+
+- **You page, "Claude":** each live connection with the client's name, when
+  it connected, when it was last used, read or read and write, and a
+  Disconnect button. A line with the MCP address and the Claude Code command
+  (`claude mcp add --transport http tab https://<host>/mcp`).
+- **Expenses and payments** made through Claude say "Added from Claude".
+- **Docs:** a "Use Tab from Claude" page: connecting from Claude Code,
+  Desktop, and claude.ai, what it can do, what it costs (nothing from Tab;
+  Claude's own plan), and the reachability note for self-hosters.
+
+### Tests that must pass before phase 6
+
+1. **The sign-in flow, end to end, no network:** `/mcp` without a token gives
+   401 with the metadata pointer; a CIMD client (fetch stubbed) and a DCR
+   client each get a code and a token; `plain` PKCE, a wrong verifier, a
+   reused code, a mismatched redirect, and a wrong `resource` are each
+   refused; the redirect carries `iss`; loopback redirects match on any port.
+2. **Tokens:** expired or wrong-resource tokens get 401; a refresh rotates and
+   the old one stops working; presenting a used refresh token revokes the
+   connection; Disconnect on the You page makes the next call 401.
+3. **Scopes:** a read-only connection calling `add_expense` gets 403
+   `insufficient_scope` and nothing is written.
+4. **The database decides:** as Priya, the tools never show Marcus's private
+   expenses or another group's anything, and with the tool's own group lookup
+   bypassed, `add_expense` into a group she isn't in fails in Postgres. The
+   policy matrix covers the four new tables as owner, other person, and
+   nobody.
+5. **Ledger rules hold through Claude:** an expense saved through the tool has
+   `via = 'claude'` and sends the split email; a payment to a member is
+   `pending`, to a counterparty `self_attested`; CIMD fetches to private
+   addresses are refused.
+
+Plus one check by hand before release: Claude Code connects to a running
+Tab, signs in in the browser, and calls `add_expense` and `get_balances` on
+the person's own groups (the long-form spec's §9 criterion).
+
 ## Deferred, with where it goes
 
 | Item | Phase |
 |---|---|
-| MCP server and OAuth | 5 |
 | Billing accounts, plans, trial, gifts, referrals, Pro owner features | 6 |
 | Submission links for people without an account, the Cloudflare mail relay for Cloud, per-person AI keys, reading allowances | 6 |
+| Editing, deleting, and confirming through Claude; confirming bills to check from Claude | After phase 5, if people ask |
 
 ## Open questions (with the default used until decided)
 
