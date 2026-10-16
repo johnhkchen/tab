@@ -55,3 +55,9 @@ config :tab,
   reads_per_day: 30,
   resend_req: [plug: {Req.Test, Tab.Inbox.Resend}],
   reader_req: [plug: {Req.Test, Tab.Reader}]
+
+# Phase 5: client metadata documents come from a Req.Test stub, and hosts
+# ending in .example resolve to a public address without DNS.
+config :tab,
+  cimd_req: [plug: {Req.Test, Tab.OAuth.CIMD}],
+  cimd_resolver: {Tab.TestResolver, :resolve}

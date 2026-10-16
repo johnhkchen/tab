@@ -18,7 +18,9 @@ defmodule Tab.Accounts.Scope do
 
   alias Tab.Accounts.User
 
-  defstruct user: nil
+  # `via` is "claude" for calls through the MCP server (`TabWeb.MCP`); the
+  # database stamps it on new expenses and payments.
+  defstruct user: nil, via: nil
 
   @doc """
   Creates a scope for the given user.
@@ -30,4 +32,7 @@ defmodule Tab.Accounts.Scope do
   end
 
   def for_user(nil), do: nil
+
+  @doc "A scope for a person acting through Claude."
+  def for_claude(%User{} = user), do: %__MODULE__{user: user, via: "claude"}
 end

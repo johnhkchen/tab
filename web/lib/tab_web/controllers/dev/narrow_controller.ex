@@ -24,7 +24,7 @@ defmodule TabWeb.Dev.NarrowController do
     conn
     |> put_session(:user_token, token)
     |> put_session(:live_socket_id, "users_sessions:#{Base.url_encode64(token)}")
-    |> html(page(paths(scope), params["shots"] == "1"))
+    |> html(page(only(paths(scope), params["only"]), params["shots"] == "1"))
   end
 
   defp paths(scope) do
@@ -48,6 +48,8 @@ defmodule TabWeb.Dev.NarrowController do
         _ -> nil
       end
 
+    consent = consent_path(scope)
+
     [
       ~p"/groups",
       ~p"/groups/#{group}",
@@ -67,12 +69,55 @@ defmodule TabWeb.Dev.NarrowController do
       item && ~p"/inbox/#{item}",
       item && ~p"/groups/#{group}/expenses/new?item=#{item.id}",
       ~p"/profile",
+      consent,
       ~p"/users/settings",
       ~p"/welcome",
       ~p"/join/not-a-real-token",
       ~p"/users/log-in"
     ]
     |> Enum.reject(&is_nil/1)
+  end
+
+  # The consent page needs a real client; the You page shows its connection.
+  defp consent_path(scope) do
+    client_id = "tab_c_narrow-demo-client"
+
+    client =
+      Tab.Repo.get_by(Tab.OAuth.Client, client_id: client_id) ||
+        Tab.Repo.insert!(%Tab.OAuth.Client{
+          client_id: client_id,
+          kind: "dcr",
+          name: "Claude Code",
+          redirect_uris: ["http://localhost/callback"]
+        })
+
+    {:ok, connections} = Tab.OAuth.list_connections(scope)
+    challenge = :crypto.hash(:sha256, "narrow") |> Base.url_encode64(padding: false)
+
+    params = %{
+      "client_id" => client.client_id,
+      "redirect_uri" => "http://localhost:1234/callback",
+      "response_type" => "code",
+      "code_challenge" => challenge,
+      "code_challenge_method" => "S256",
+      "resource" => Tab.OAuth.resource(),
+      "state" => "narrow"
+    }
+
+    if connections == [] do
+      {:ok, request} = Tab.OAuth.check_request(params)
+      Tab.OAuth.approve(scope, request, true)
+    end
+
+    "/oauth/authorize?" <> URI.encode_query(params)
+  end
+
+  # `?only=/profile,/oauth` keeps the pages whose path starts with one of these.
+  defp only(paths, nil), do: paths
+
+  defp only(paths, prefixes) do
+    prefixes = String.split(prefixes, ",", trim: true)
+    Enum.filter(paths, fn path -> Enum.any?(prefixes, &String.starts_with?(path, &1)) end)
   end
 
   defp page(paths, shots?) do

@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-16: Phase 5 specified
+## 2026-10-16: Phase 5 specified and built
 
 ### Done
 - Distilled phase 5 ("Use Tab from Claude") from the long-form spec §8 into
@@ -18,6 +18,25 @@ this repo), **Gotchas**, **Next**.
 - Checked what Claude's clients and the libraries support today (sources:
   modelcontextprotocol.io authorization spec 2026-07-28, claude.com connector
   authentication docs, Boruta's changelog, anubis_mcp docs).
+- Built phase 5. Migration `20261016090000_create_oauth.exs`: `oauth_clients`,
+  `oauth_connections`, `oauth_codes`, `oauth_tokens` with one policy per verb,
+  and `via` on expenses and payments, stamped by a trigger from `app.via`.
+  `Tab.Repo.as_user/3` takes `via:`; `Scope.for_claude/1` carries it.
+- `Tab.OAuth` (codes, PKCE, rotating refresh tokens, revocation, CIMD and
+  DCR clients), `Tab.OAuth.CIMD` (public-address-only fetch, pinned IP, 10 KB,
+  5 s), `Tab.OAuth.RateLimit` (ETS), a nightly sweep of unused DCR clients.
+- `TabWeb.OAuthController` (metadata, token, register, revoke), the consent
+  page `/oauth/authorize`, the `/mcp` plug (`TabWeb.MCP`) and its seven tools
+  (`TabWeb.MCP.Tools`). The You page lists connections with Disconnect;
+  expenses and payments show "from Claude".
+- `/dev/narrow` covers the consent page and takes `?only=/profile,/oauth` to
+  screenshot a few pages. 22 of 22 fit 360 px.
+- Docs page `/docs/claude/` ("Use Tab from Claude"), a `TAB_MCP` row on the
+  self-host page, a privacy line, and "What works today" says 0.5.0 (site not
+  deployed yet; that waits for the release).
+- 444 web tests (was 416), including the policy matrix for the four tables
+  and an end-to-end flow over HTTP. A live dev server answers discovery and
+  registration correctly.
 
 ### Decided
 - Tab runs its own small OAuth 2.1 server instead of Boruta. Boruta 2.3.8 has
@@ -31,13 +50,24 @@ this repo), **Gotchas**, **Next**.
   no editing, deleting, or confirming through Claude in phase 5.
 - Tools: list_groups, get_balances, list_recent_expenses, suggest_settle_up,
   list_bills_to_check, add_expense, record_payment.
-- MCP library: `anubis_mcp` (Hermes's successor), with a hand-written plug as
-  the way out.
+- MCP library: none. While building, MCP 2026-07-28 turned out to drop
+  sessions and the `initialize` handshake, and `anubis_mcp` stops at
+  2025-11-25. `TabWeb.MCP` is a stateless plug serving both eras. Spec updated.
 
 ### State of the world
 - Nothing outside the repo changed.
 
 ### Gotchas
+- `git add -A` staged `working_specification.md`; caught before committing.
+  It's now in `.git/info/exclude` (local only), so `git status` no longer
+  lists it. Stage paths by name anyway.
+- `@callback` is a reserved module attribute: a test using it fails with a
+  typespec error. Use another name.
+- BSD `sed` has no `\b`; use `perl -pi -e` for word-boundary edits.
+- Headless Chrome drops the session cookie between runs, so screenshots of
+  signed-in pages go through one `/dev/narrow?shots=1&only=...` load.
+- The dev database holds real bills from phase 4 testing. Screenshots of
+  `/dev/narrow` can show them; delete them after looking.
 - claude.ai and Desktop connect from Anthropic's servers (`160.79.104.0/21`),
   so they need Tab on public HTTPS. Claude Code connects from the person's own
   machine and uses a loopback callback on a random port: match loopback
@@ -49,8 +79,8 @@ this repo), **Gotchas**, **Next**.
   rotation for public clients; token endpoints get 10 seconds.
 
 ### Next
-1. Build phase 5: migration for the OAuth tables and `via`, then `Tab.OAuth`,
-   then the `/mcp` tools, then the You page and docs.
+1. Check by hand with real Claude Code against the dev server (the spec's
+   last phase 5 check), then release v0.5.0 and deploy the site.
 
 ---
 

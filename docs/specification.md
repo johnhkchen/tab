@@ -753,7 +753,7 @@ exactly as it does on the web.
 | What a connection can do | Two scopes: `tab:read` (groups, balances, expenses, bills to check) and `tab:write` (add expenses, record payments). The consent page asks for read and offers "Let Claude add expenses and record payments", ticked by default; unticked, the connection only reads. Decided 2026-10-16. |
 | Claude's writes | Saved at once, like the web form, under the person's own policies. Expenses and payments made through Claude carry `via = 'claude'` and show "Added from Claude". The usual emails go out. Payments to another member still wait for the payee's confirm. Claude never edits, deletes, confirms, or declines anything in phase 5. Decided 2026-10-16. |
 | Tools | `list_groups`, `get_balances`, `list_recent_expenses`, `suggest_settle_up`, `list_bills_to_check` (read), `add_expense`, `record_payment` (write). Confirming bills to check stays on the web, where the document is. Decided 2026-10-16. |
-| MCP library | `anubis_mcp` (successor to `hermes_mcp`), its Streamable HTTP plug mounted at `/mcp`. It speaks MCP up to 2025-11-25; clients on 2026-07-28 negotiate down. If it falls behind, the tools-only server is small enough to replace with a hand-written JSON-RPC plug. |
+| MCP library | None: a hand-written plug (`TabWeb.MCP`), stateless, tools only. MCP 2026-07-28 dropped sessions and the `initialize` handshake, and `anubis_mcp` (the Elixir library) speaks only up to 2025-11-25. With no sessions to keep, one plug answers both eras: `initialize` for older clients, `server/discover` and per-request `_meta` for new ones. Decided 2026-10-16 while building, replacing `anubis_mcp`. |
 | Who can reach it | Claude Code connects from the person's own machine, so a LAN or Tailscale address works. claude.ai and Desktop connect from Anthropic's servers (`160.79.104.0/21`), so they need Tab on public HTTPS. The self-host docs say this plainly. |
 | Other MCP clients | Anything following the MCP authorization spec should work (Codex, Cursor, others); only Claude's clients are tested. |
 
@@ -774,7 +774,7 @@ exactly as it does on the web.
 | `POST /oauth/token` | Form-encoded. `authorization_code` (with `code_verifier` and `resource`) and `refresh_token`. Answers within 10 seconds. |
 | `POST /oauth/register` | DCR. Public clients only (`token_endpoint_auth_method: none`). Limited to 20 a day per IP. |
 | `POST /oauth/revoke` | RFC 7009, for clients that disconnect themselves. |
-| `/mcp` | Streamable HTTP. No or bad token: 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="tab:read"`. Missing scope: 403 `insufficient_scope` with `scope="tab:write"`. |
+| `/mcp` | Streamable HTTP, POST only (GET and DELETE get 405), one JSON body per request, no sessions. Versions 2026-07-28, 2025-11-25, 2025-06-18, 2025-03-26; anything else gets `-32022` with the list. No or bad token: 401 with `WWW-Authenticate: Bearer resource_metadata="…", scope="tab:read"`. Missing scope: 403 `insufficient_scope` with `scope="tab:write"`. An `Origin` other than Tab's own or `https://claude.ai` gets 403. |
 
 Rules the endpoints enforce:
 
@@ -795,13 +795,13 @@ Rules the endpoints enforce:
    `client_id` must equal its URL. Cached per `Cache-Control`, at least 5
    minutes and at most a day.
 7. **Rate limit:** 60 tool calls a minute per connection; past it, a tool error
-   saying when to try again.
+   saying when to try again. Counted in memory (ETS), so a restart resets it.
 
 ### Tables
 
 **oauth_clients**: `id`, `client_id` (text, unique: the CIMD URL, or a random
 id for DCR), `kind` (`cimd` | `dcr`), `name`, `redirect_uris` (text[]),
-`fetched_at` (CIMD), `inserted_at`. Not person data. DCR clients with no
+`fetched_at` and `fresh_until` (CIMD), `inserted_at`. Not person data. DCR clients with no
 connection after a day are cleared by a nightly job.
 
 **oauth_connections**: `id`, `user_id`, `client_id` (fk), `scopes` (text[]),
@@ -824,7 +824,7 @@ alongside `app.user_id`.
 
 | Table | select | insert | update | delete |
 |---|---|---|---|---|
-| oauth_clients | none | none | none | none |
+| oauth_clients | the name, id, and kind of clients the person has a connection to | none | none | none |
 | oauth_connections | owner | owner | owner (`revoked_at` only) | none |
 | oauth_codes | none | none | none | none |
 | oauth_tokens | none | none | none | none |

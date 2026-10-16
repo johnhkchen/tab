@@ -30,7 +30,11 @@ config :tab, Oban,
   repo: Tab.Repo,
   queues: [default: 10, mail: 5, inbox: 5, read: 3],
   plugins: [
-    {Oban.Plugins.Cron, crontab: [{"0 9 * * *", Tab.Inbox.DigestWorker}]}
+    {Oban.Plugins.Cron,
+     crontab: [
+       {"0 9 * * *", Tab.Inbox.DigestWorker},
+       {"30 3 * * *", Tab.OAuth.SweepWorker}
+     ]}
   ]
 
 # Where the BAML extraction service listens (extract/).

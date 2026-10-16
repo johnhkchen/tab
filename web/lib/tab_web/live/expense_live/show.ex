@@ -54,6 +54,7 @@ defmodule TabWeb.ExpenseLive.Show do
           <:item title="Category">
             {GroupData.category_name(@data, @expense.category_id) || "None"}
           </:item>
+          <:item :if={@expense.via == "claude"} title="Added">From Claude</:item>
           <:item :if={@expense.edited_at} title="Last edited">
             {format_date(@expense.edited_at)}
           </:item>

@@ -17,6 +17,8 @@ defmodule Tab.Ledger.Payment do
     # Set by the database from the parties; never cast.
     field :status, :string
     field :recorded_by, :binary_id
+    # Set by the database from the session ("web" or "claude").
+    field :via, :string, default: "web"
     field :confirmed_at, :utc_datetime
     field :confirmed_by, :binary_id
     field :deleted_at, :utc_datetime

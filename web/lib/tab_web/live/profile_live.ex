@@ -104,6 +104,74 @@ defmodule TabWeb.ProfileLive do
         </form>
       </.card>
 
+      <.card :if={@mcp} title="Use Tab from Claude" id="claude">
+        <p class="mb-3 text-ink-soft">
+          Ask Claude what you owe, or tell it what you spent. It works as you, on your own Claude plan.
+        </p>
+        <label for="claude-command" class="text-sm">In Claude Code, run:</label>
+        <input
+          id="claude-command"
+          readonly
+          value={@claude_command}
+          class="tab-field font-mono text-sm"
+          phx-click={JS.dispatch("tab:select")}
+        />
+        <.button
+          variant="soft"
+          class="mt-2"
+          phx-click={JS.dispatch("tab:copy", to: "#claude-command")}
+        >
+          Copy
+        </.button>
+        <label for="claude-address" class="mt-3 block text-sm">
+          In Claude Desktop or claude.ai, add a custom connector with this address:
+        </label>
+        <input
+          id="claude-address"
+          readonly
+          value={@mcp_address}
+          class="tab-field font-mono text-sm"
+          phx-click={JS.dispatch("tab:select")}
+        />
+        <.button
+          variant="soft"
+          class="mt-2"
+          phx-click={JS.dispatch("tab:copy", to: "#claude-address")}
+        >
+          Copy
+        </.button>
+
+        <h3 class="mt-5 font-semibold">Connected</h3>
+        <p :if={@connections == []} class="text-ink-soft" id="no-connections">Nothing yet.</p>
+        <ul class="divide-y divide-line">
+          <li
+            :for={c <- @connections}
+            id={"connection-#{c.id}"}
+            class="flex flex-wrap items-center justify-between gap-2 py-2"
+          >
+            <span>
+              <span class="block">{c.client.name}</span>
+              <span class="block text-sm text-ink-soft">
+                {if "tab:write" in c.scopes,
+                  do: "Can add expenses and payments",
+                  else: "Can only look"} · connected {format_date(c.inserted_at)} · {if c.last_used_at,
+                  do: "last used #{format_date(c.last_used_at)}",
+                  else: "not used yet"}
+              </span>
+            </span>
+            <.button
+              variant="soft"
+              id={"disconnect-#{c.id}"}
+              phx-click="disconnect"
+              phx-value-id={c.id}
+              data-confirm={"Disconnect #{c.client.name}? It stops working at once."}
+            >
+              Disconnect
+            </.button>
+          </li>
+        </ul>
+      </.card>
+
       <.card title="Your account">
         <div class="flex flex-wrap gap-2">
           <.button variant="soft" navigate={~p"/users/settings"}>Email and password</.button>
@@ -127,7 +195,23 @@ defmodule TabWeb.ProfileLive do
        kinds: @kinds,
        digest_options: Enum.map(@digests, fn {key, label, _} -> {label, key} end),
        page_title: "You"
-     )}
+     )
+     |> load_connections()}
+  end
+
+  defp load_connections(socket) do
+    if Tab.OAuth.enabled?() do
+      {:ok, connections} = Tab.OAuth.list_connections(socket.assigns.current_scope)
+
+      assign(socket,
+        mcp: true,
+        connections: connections,
+        mcp_address: Tab.OAuth.resource(),
+        claude_command: "claude mcp add --transport http tab #{Tab.OAuth.resource()}"
+      )
+    else
+      assign(socket, mcp: false, connections: [])
+    end
   end
 
   @impl true
@@ -148,6 +232,13 @@ defmodule TabWeb.ProfileLive do
 
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "That didn't save. Try again.")}
+    end
+  end
+
+  def handle_event("disconnect", %{"id" => id}, socket) do
+    case Tab.OAuth.disconnect(socket.assigns.current_scope, id) do
+      {:ok, _} -> {:noreply, socket |> put_flash(:info, "Disconnected.") |> load_connections()}
+      {:error, _} -> {:noreply, load_connections(socket)}
     end
   end
 

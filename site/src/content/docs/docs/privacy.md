@@ -24,6 +24,8 @@ rows you're not allowed to see.
 - **Two services see what you send.** Forwarded email passes through Resend,
   and the bill reader sends each document to Anthropic's Claude to read it.
   Neither one gets anything else from Tab.
+- **Claude gets in only if you connect it.** It sees what you see and nothing
+  more, and you can disconnect it on your You page.
 
 ## How it works
 

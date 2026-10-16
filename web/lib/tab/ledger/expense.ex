@@ -15,6 +15,8 @@ defmodule Tab.Ledger.Expense do
     # Set when the expense was logged from a recurring bill.
     belongs_to :template, Tab.Bills.Template
     field :created_by, :binary_id
+    # Set by the database from the session ("web" or "claude").
+    field :via, :string, default: "web"
     # Set by the database when what was spent or how it's split changes.
     field :edited_at, :utc_datetime
     field :deleted_at, :utc_datetime

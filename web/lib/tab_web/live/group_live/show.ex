@@ -150,6 +150,7 @@ defmodule TabWeb.GroupLive.Show do
         <span class="font-semibold">{@e.description}</span>
         <span :if={@e.visibility == "private"} class="clay-chip ml-1 px-2 py-0.5 text-xs">Only you</span>
         <span :if={@e.edited_at} class="ml-1 text-xs text-ink-soft">edited</span>
+        <span :if={@e.via == "claude"} class="ml-1 text-xs text-ink-soft">from Claude</span>
         <span class="block text-sm text-ink-soft">
           {GroupData.name_user(@data, @e.paid_by)} paid · {format_date(@e.date)}
         </span>
@@ -170,7 +171,9 @@ defmodule TabWeb.GroupLive.Show do
           GroupData.to_party(@p)
         )}
         <span class="block text-sm text-ink-soft">
-          {method_name(@p.method)} · {format_date(@p.date)} · {status_label(@p.status)}
+          {method_name(@p.method)} · {format_date(@p.date)} · {status_label(@p.status)}<span :if={
+            @p.via == "claude"
+          }> · from Claude</span>
         </span>
       </span>
       <.money cents={@p.amount_cents} class={@p.status in ["pending", "declined"] && "text-ink-soft"} />

@@ -47,7 +47,7 @@ arrives through Resend inbound webhooks, on self-host and Cloud alike; no in-app
 mail server. Matching bills to phase 3's templates, and the twice-a-month digest.
 Spec: [specification.md §Phase 4](specification.md#phase-4-reading-bills).
 
-## Phase 5: Use Tab from Claude (next)
+## Phase 5: Use Tab from Claude (built; release after a check with real Claude Code)
 
 A remote MCP server at `/mcp` with Tab's own OAuth sign-in, so people can log
 expenses, record payments, and check balances from Claude Code, Claude

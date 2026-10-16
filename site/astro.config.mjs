@@ -44,6 +44,7 @@ export default defineConfig({
 			sidebar: [
 				{ label: 'Start here', slug: 'docs' },
 				{ label: 'Send Tab your bills', slug: 'docs/reading' },
+				{ label: 'Use Tab from Claude', slug: 'docs/claude' },
 				{ label: 'Bills, time away, and asking for it', slug: 'docs/bills' },
 				{ label: 'Run it yourself', slug: 'docs/self-host' },
 				{ label: 'How your privacy is kept', slug: 'docs/privacy' },

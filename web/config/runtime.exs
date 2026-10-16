@@ -42,6 +42,9 @@ end
 # One currency per instance; amounts are whole cents of it.
 config :tab, :currency, System.get_env("TAB_CURRENCY", "USD") |> String.upcase()
 
+# The MCP server and its OAuth endpoints (docs/specification.md, "Phase 5").
+config :tab, :mcp, System.get_env("TAB_MCP", "on") != "off"
+
 if extract_url = System.get_env("EXTRACT_URL") do
   config :tab, :extract_url, extract_url
 end

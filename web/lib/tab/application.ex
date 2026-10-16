@@ -13,6 +13,7 @@ defmodule Tab.Application do
       {DNSCluster, query: Application.get_env(:tab, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: Tab.PubSub},
       {Oban, Application.fetch_env!(:tab, Oban)},
+      Tab.OAuth.RateLimit,
       # Start to serve requests, typically the last entry
       TabWeb.Endpoint
     ]

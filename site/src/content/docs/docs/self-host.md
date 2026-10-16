@@ -45,6 +45,7 @@ Put these in a file called `.env` next to `compose.yaml` if you need them:
 | `POSTGRES_PASSWORD` | The database password. Set it before the first start.             | `postgres`  |
 | `SECRET_KEY_BASE`   | Signs logins. Leave it out and Tab makes one on first start.      | (made for you) |
 | `TAB_CURRENCY`      | The currency every amount is in, one per install (`USD`, `EUR`, `GBP`…). | `USD` |
+| `TAB_MCP`           | Set to `off` to stop Claude and other apps connecting ([Use Tab from Claude](/docs/claude/)). | on |
 
 ## Email
 

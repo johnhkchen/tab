@@ -29,7 +29,18 @@ defmodule TabWeb.Router do
     get "/healthz", HealthController, :show
     # Resend's email.received webhook; the signature decides (Tab.Inbox.Resend).
     post "/inbound/resend", InboundController, :resend
+
+    # Tab's OAuth server for the MCP server (Tab.OAuth).
+    get "/.well-known/oauth-protected-resource", OAuthController, :protected_resource
+    get "/.well-known/oauth-protected-resource/mcp", OAuthController, :protected_resource
+    get "/.well-known/oauth-authorization-server", OAuthController, :authorization_server
+    post "/oauth/token", OAuthController, :token
+    post "/oauth/register", OAuthController, :register
+    post "/oauth/revoke", OAuthController, :revoke
   end
+
+  # The MCP server: a bearer token decides who's asking (TabWeb.MCP).
+  forward "/mcp", TabWeb.MCP
 
   # Enable LiveDashboard and Swoosh mailbox preview in development
   if Application.compile_env(:tab, :dev_routes) do
@@ -78,6 +89,8 @@ defmodule TabWeb.Router do
       live "/inbox", InboxLive.Index, :index
       live "/inbox/forwarding", InboxLive.Forwarding, :show
       live "/inbox/:id", InboxLive.Show, :show
+
+      live "/oauth/authorize", OAuthLive.Authorize, :show
     end
 
     get "/documents/:id", DocumentController, :show

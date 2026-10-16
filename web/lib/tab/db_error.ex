@@ -37,13 +37,17 @@ defmodule Tab.DBError do
   `{:ok, value}` or `{:error, reason}`; an error rolls everything back. A
   refusal from the database comes back as `{:error, reason}` instead of raising.
   """
-  def as_user(%Tab.Accounts.Scope{user: %{id: user_id}}, fun) do
-    Tab.Repo.as_user(user_id, fn ->
-      case fun.() do
-        {:ok, value} -> value
-        {:error, reason} -> Tab.Repo.rollback(reason)
-      end
-    end)
+  def as_user(%Tab.Accounts.Scope{user: %{id: user_id}} = scope, fun) do
+    Tab.Repo.as_user(
+      user_id,
+      fn ->
+        case fun.() do
+          {:ok, value} -> value
+          {:error, reason} -> Tab.Repo.rollback(reason)
+        end
+      end,
+      via: scope.via
+    )
   rescue
     e in Postgrex.Error ->
       case reason(e) do
