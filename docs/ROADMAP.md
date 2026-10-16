@@ -62,14 +62,25 @@ More ways in, built inside Phoenix rather than through a hosted sign-in service
 account with them, and every privacy rule keys on Tab's own user ids). The
 emailed link stays the default.
 
-## Phase 6: Hosted Tab (later)
+## Phase 6: Hosted Tab opens (next)
 
-The Cloud edition on the maintainer's Hetzner server: billing accounts, Paddle,
-plans (Hosted free, Plus $10/yr, Pro $24/yr), the 3-month trial and its extensions,
-gifts, referrals, reading allowances, and Pro's owner features (aggregated
-balances, reimbursements, multi-property bills). Hosted only after the self-host
-edition is complete on its own.
+Tab on the maintainer's Hetzner server at `app.tab.b28.dev`: anyone can sign
+up and gets 3 months of Plus, then keeps everything but bill reading for free,
+asks for 6 more months, or buys Plus ($10 a year) through Paddle. Reading
+allowances, account deletion, a small admin page, and the Terms, Refunds, and
+Privacy pages Paddle needs. Same image and `compose.yaml` as self-host.
+Spec: [specification.md §Phase 6](specification.md#phase-6-hosted-tab-opens).
 
+## Phase 7: Pro, tools for landlords (later)
+
+Owner links to counterparties, the net balance across households,
+reimbursements paid from the owner's page, and one bill split across several
+properties. Pro ($24 a year) goes on sale here.
+
+## Phase 8: Gifts, referrals, and submission links (later)
+
+A 6-month gift once a year, referral months, links that let people without
+an account send in a bill, and duplicating a group's setup.
 ## Always on
 
 - The public website and its docs keep pace with what's shipped.

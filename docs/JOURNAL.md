@@ -8,7 +8,7 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
-## 2026-10-16: v0.5.0 released; phase 5 specified and built
+## 2026-10-16: v0.5.0 released; phase 5 built; phase 6 specified
 
 ### Done
 - Distilled phase 5 ("Use Tab from Claude") from the long-form spec §8 into
@@ -52,6 +52,24 @@ this repo), **Gotchas**, **Next**.
   registration correctly.
 
 ### Decided
+- Phase 6 specified (`docs/specification.md` §Phase 6). Hosted Tab ships in
+  three phases: 6 opens it (Hosted free and Plus), 7 is Pro's landlord tools
+  and selling Pro, 8 is gifts, referrals, and submission links. ROADMAP
+  rewritten to match.
+- Phase 6 sells Plus only; Pro shows "Opens later" until phase 7.
+- Plus covers one person, in all their groups.
+- No reading and no own-key option on Hosted free (the pricing page and the
+  long-form spec's §2.1 and §9 lines changed to match).
+- Allowances per person per month: Plus 100, Pro 300, trial 20. Trial jobs
+  run at lower priority.
+- Cloud mail stays on Resend inbound (John's pick over the Cloudflare relay);
+  Resend's paid plan when the free 100 a day runs short.
+- Refunds: 30 days, full. Sign-up: open, 50 new accounts a day. Trial
+  extensions granted on a small `/admin` page that shows no ledger data.
+- Deleting an account removes the person and their private data and keeps
+  shared expenses under "Former member"; on every edition.
+- Cloud's Anthropic key must be a standard paid API account, not Max-plan
+  credits.
 - Tab runs its own small OAuth 2.1 server instead of Boruta. Boruta 2.3.8 has
   no resource indicators (RFC 8707, required by MCP) and no client ID metadata
   documents; its 3.0 line has been beta since 2025.
@@ -94,7 +112,9 @@ this repo), **Gotchas**, **Next**.
 ### Next
 1. Optional: click through Connect with real Claude Code once
    (`claude mcp add --transport http tab-dev http://localhost:4000/mcp`).
-2. Pick the next phase: Google sign-in and passkeys, or phase 6 (Hosted Tab).
+2. Build phase 6. Before Paddle can go live, John: create the Paddle account
+   (sandbox first; approval takes days), a standard Anthropic API key for
+   Cloud, and SSH access to the Hetzner server for the deploy.
 
 ---
 

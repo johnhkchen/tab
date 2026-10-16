@@ -1,4 +1,4 @@
-# Specification: phases 1 to 5
+# Specification: phases 1 to 6
 
 The buildable spec for the phases built so far and the one in progress (see [ROADMAP.md](ROADMAP.md)). It
 distills the long-form product spec into decisions an engineer can build from.
@@ -897,12 +897,151 @@ Plus one check by hand before release: Claude Code connects to a running
 Tab, signs in in the browser, and calls `add_expense` and `get_balances` on
 the person's own groups (the long-form spec's §9 criterion).
 
+## Phase 6: Hosted Tab opens
+
+Tab, run by the maintainer, for people who don't want to run a server. Anyone
+can sign up and gets 3 months of Plus. After that they keep everything except
+bill reading for free, ask for 6 more months, or buy Plus for $10 a year. The
+same code and the same `compose.yaml` as self-host; everything here is dark
+unless `TAB_EDITION=cloud`.
+
+Pro's landlord tools (and selling Pro) are phase 7. Gifts, referrals, and
+submission links are phase 8.
+
+### Decisions for this phase
+
+| Question | Decision |
+|---|---|
+| How it ships | Hosted Tab is three phases: 6 opens it with Hosted free and Plus; 7 adds Pro's landlord tools and starts selling Pro; 8 adds gifts, referrals, and submission links. Decided 2026-10-16, replacing one big phase 6. |
+| What phase 6 sells | Plus only. The pricing page shows Pro with "Opens later" until phase 7, so nobody pays for tools that don't exist yet. |
+| Who a plan covers | One person. Plus reads that person's bills, in every group they're in. Housemates who want their own bills read get their own Plus (or, from phase 8, a gift). Matches the pricing page ("all on one plan"). |
+| Reading on Hosted free | None, and no own-key option. Photos, PDFs, and forwarded mail still land in Bills to check, to fill in by hand. Decided 2026-10-16, replacing the long-form spec's own-key (BYOK) promise; the pricing page changes to match. |
+| Reading allowances | Per person per calendar month (UTC): paid Plus 100 documents, Pro 300 (phase 7), trial and extensions 20. `TAB_READS_PER_DAY` (30) still applies. At 80% Tab emails the person once; at the limit, new items wait as "Reading paused until the 1st", to fill in by hand or leave for next month. Never a charge. Measured cost is about $0.002 a document, so a Plus account at its limit all year costs about $2.40 of the roughly $9 Tab keeps after Paddle's fee. Decided 2026-10-16. |
+| Trial reading priority | Trial and extension documents run at a lower Oban priority than paid ones, so they wait behind paying accounts when both arrive at once. |
+| Forwarded mail on Cloud | Resend inbound, as on self-host (`bills.tab.b28.dev`, already set up). Resend's free plan takes 100 emails a day and 3,000 a month across everyone; the admin page shows today's count, and Resend's paid plan ($20 a month) starts when it nears the cap. Decided 2026-10-16, replacing the long-form spec's Cloudflare relay for now. |
+| Billing | Paddle Billing as merchant of record (decided in the long-form spec). One price: Plus, $10 a year, USD. Paddle Checkout (Paddle.js overlay) from the Plans page, with the person's id in `custom_data`. Paddle's customer portal handles cancelling and changing cards. The webhook is the only writer of subscription fields. |
+| Refunds | Full refund within 30 days of any charge, no questions, through Paddle. Decided 2026-10-16. |
+| When Plus ends | A cancelled or unpaid subscription stays Plus until its paid period ends, then becomes Hosted free. Nothing is deleted; reading stops. |
+| The trial | Every new Cloud account gets 3 months of trial Plus, no card. One trial per email address, ever: a hash of each address that started a trial is kept, even after the account is deleted. |
+| Asking for more | From two weeks before the trial ends, the You page offers "Ask for 6 more months" with one question: the first time, "What do you use Tab for?"; after that, "Would you write a few words we can quote? (Honest is fine, and you can say no.)" The maintainer grants requests on the admin page; granting adds 6 months of trial Plus and emails the person. Repeats without limit. A quote is never required to be kind, and any one published says the writer got free months. |
+| Who can sign up | Anyone, up to `TAB_SIGNUPS_PER_DAY` new accounts a day (default 50). Past it, the sign-in page says Tab is full for today and to try tomorrow; existing accounts sign in as usual. Decided 2026-10-16. |
+| The admin page | `/admin`, only for addresses in `TAB_ADMIN_EMAILS`. Shows: extension requests with their answers and a Grant button; counts of accounts, trials, and paid Plus; documents read this month with an estimated cost; forwarded emails today against Resend's 100. Never shows a group, an expense, a bill, or anyone's ledger. Decided 2026-10-16. |
+| Deleting an account | "Delete my account" on the You page, on every edition. Deleted: email, name, password, sessions, payment handles, forwarding addresses, Claude connections, bills to check and their documents, private expenses and their audit entries. Kept: shared expenses and payments, shown under "Former member", so housemates' balances stay right. They leave every group. Tab suggests settling up first but doesn't require it. A Paddle subscription is cancelled at once and refunded if within 30 days. This is the one exception to "no hard deletes", done by one database function. Decided 2026-10-16. |
+| Legal pages | Plain-language Terms, Refunds, and an expanded Privacy page on the website, which Paddle needs before approving the account. Drafted in the repo; the maintainer reads them before they go to Paddle. |
+| The Anthropic key on Cloud | A standard paid API account, not the Max plan's monthly credits: Anthropic's credit terms rule out using them to serve other people. Spend cap set in the Console. |
+| Where it runs | The maintainer's Hetzner server, following the long-form spec's §7.2 checklist: Tab's own Unix user with rootless Docker, `TAB_LISTEN=127.0.0.1` behind the server's TLS proxy, only SSH/80/443 open, secrets from Doppler `tab/prd` through a read-only service token, nightly encrypted `pg_dump` off the box, automatic security updates, an outside uptime monitor. Address: `app.tab.b28.dev`. WAL streaming to R2 and a written restore runbook come before the first paid account. |
+
+### Configuration
+
+| Variable | Meaning |
+|---|---|
+| `TAB_EDITION` | `cloud` turns on plans, the trial, Paddle, allowances, the sign-up limit, and the admin page. Anything else (the default) is self-host: no plans, reading as in phase 4. |
+| `PADDLE_ENV` | `sandbox` (dev) or `production`. |
+| `PADDLE_API_KEY`, `PADDLE_CLIENT_TOKEN`, `PADDLE_WEBHOOK_SECRET`, `PADDLE_PLUS_PRICE_ID` | From Paddle; Doppler `tab/dev` (sandbox) and `tab/prd`. |
+| `TAB_ADMIN_EMAILS` | Comma-separated addresses that can open `/admin`. |
+| `TAB_SIGNUPS_PER_DAY` | New accounts a day (default 50). |
+
+### Tables
+
+**billing_accounts**: `user_id` (pk), `paid_plan` (`plus` \| `pro`, null when
+none), `paid_until`, `paddle_customer_id`, `paddle_subscription_id`,
+`subscription_status` (Paddle's), `trial_until`, `warned_month` (the month
+the 80% email went out). Made for each new account on Cloud. A person's plan
+is worked out, never stored: paid Plus when `paid_until` is in the future,
+else trial Plus when `trial_until` is, else Hosted free.
+
+**trial_emails**: `email_hash` (sha256 of the lowercased address, pk),
+`inserted_at`. No user id, so it survives deleting the account.
+
+**extension_requests**: `id`, `user_id`, `question`, `answer`, `may_quote`
+(boolean), `status` (`waiting` \| `granted` \| `declined`), `decided_at`,
+`inserted_at`.
+
+**paddle_events**: `event_id` (Paddle's, pk), `event_type`, `occurred_at`,
+`payload` (jsonb), `processed_at`. The webhook writes the event and applies it
+in one transaction, so a repeated event changes nothing.
+
+**reads**: `id`, `user_id`, `document_id`, `paid` (boolean), `read_on` (date).
+One row per document sent to the reader on Cloud, counted for allowances and
+the admin page's estimate. Kept after the document is purged; dropped with
+the account.
+
+### Row-level security for the new tables
+
+| Table | select | insert | update | delete |
+|---|---|---|---|---|
+| billing_accounts | owner | none | none | none |
+| trial_emails | none | none | none | none |
+| extension_requests | owner | owner, `status = 'waiting'` | none | none |
+| paddle_events | none | none | none | none |
+| reads | owner | none | none | none |
+
+Billing fields change only through `Tab.Billing`, as the connection owner, in
+three places: the Paddle webhook, account creation, and granting on the admin
+page. Like `Tab.OAuth`, it's the only module allowed to, and it reads no
+person data beyond the billing tables and the user's email (for the admin
+page and for emails). Reads are recorded by the read worker the same way.
+
+### Paddle webhook
+
+`POST /paddle/webhook`. The signature is checked first (`Paddle-Signature:
+ts=…;h1=…`, HMAC-SHA256 over `ts:body` with `PADDLE_WEBHOOK_SECRET`, 5-minute
+tolerance): a bad one gets 401 and nothing written. Answers 200 only after the
+event is committed, and 503 on a database error so Paddle tries again.
+Handles `subscription.created`, `subscription.updated`,
+`subscription.canceled`, `subscription.past_due`, and `transaction.completed`;
+anything else is stored and ignored. `paid_until` is the subscription's
+current period end; events arriving out of order are applied by
+`occurred_at`, so an older event never overwrites a newer one.
+
+### Pages
+
+- **Plans** (`/plans`): your plan in words ("Plus until Jan 16, 2027", "Trial
+  Plus, 23 days left", "Hosted free"), reading used this month ("12 of 100
+  bills read"), Buy Plus (Paddle Checkout), Manage billing (Paddle's portal),
+  and Ask for 6 more months when it applies.
+- **You page:** a line with the plan and a link to Plans; Delete my account
+  (type DELETE to confirm).
+- **Bills to check:** on Hosted free, "Tab reads bills on Plus" with a link to
+  Plans; at the limit, "Reading paused until Nov 1".
+- **Admin** (`/admin`): as above.
+- **Website:** Terms, Refunds, the Privacy page (Paddle as merchant of record,
+  what deleting an account removes), pricing copy without the own-key line,
+  and Pro marked "Opens later".
+
+### Tests that must pass before phase 7
+
+1. **Self-host untouched:** with `TAB_EDITION` unset, no billing row is made,
+   reading works as in phase 4, `/plans` and `/admin` are 404, and every
+   earlier test passes.
+2. **Plans from dates:** a new Cloud account is trial Plus for 3 months, then
+   Hosted free with every ledger feature working and its data intact; a
+   second account with the same email (after deleting the first) gets no
+   trial; paid Plus outranks trial; nothing in the trial or extension path
+   can create a charge.
+3. **Allowances, server-side:** the 21st document of a trial month and the
+   101st of a paid month aren't read and wait as paused; the 80% email goes
+   once; Hosted free reads nothing; trial jobs run at lower priority than
+   paid ones.
+4. **The webhook:** a correctly signed `subscription.created` makes the
+   account paid Plus, once, even sent twice; a bad signature gets 401 and
+   nothing written; a database failure gets 503; an older `updated` after a
+   newer one changes nothing; `canceled` keeps Plus until `paid_until`.
+5. **Privacy holds:** billing rows are readable by their owner only; `/admin`
+   refuses everyone not in `TAB_ADMIN_EMAILS` and shows no ledger data to
+   those who are; deleting an account removes everything listed above,
+   leaves housemates' balances unchanged, and the deleted person can't sign
+   in.
+
 ## Deferred, with where it goes
 
 | Item | Phase |
 |---|---|
-| Billing accounts, plans, trial, gifts, referrals, Pro owner features | 6 |
-| Submission links for people without an account, the Cloudflare mail relay for Cloud, per-person AI keys, reading allowances | 6 |
+| Pro: owner links, the net balance across households, reimbursements, one bill across several properties, selling Pro | 7 |
+| Gifts, referrals, submission links for people without an account | 8 |
+| The Cloudflare mail relay for Cloud | When Resend's free plan runs short, if its paid plan costs more than building the relay |
+| Own-key (BYOK) reading on Hosted free | Dropped 2026-10-16 |
+| Duplicating a group's setup | 8 |
 | Editing, deleting, and confirming through Claude; confirming bills to check from Claude | After phase 5, if people ask |
 
 ## Open questions (with the default used until decided)
