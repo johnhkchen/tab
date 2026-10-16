@@ -309,6 +309,22 @@ defmodule Tab.Accounts do
     :ok
   end
 
+  ## Deleting an account
+
+  @doc """
+  Deletes the person's account (docs/specification.md, "Deleting an
+  account"): `ledger.forget_user/1` removes them and their private data and
+  keeps the shared ledger under "Former member". Returns the session tokens
+  that stopped working, so open pages can be signed out.
+  """
+  def delete_account(%Scope{user: %User{id: id}}) do
+    Repo.transact(fn ->
+      tokens = Repo.all_by(UserToken, user_id: id)
+      Repo.query!("SELECT ledger.forget_user($1)", [Ecto.UUID.dump!(id)])
+      {:ok, tokens}
+    end)
+  end
+
   ## Token helper
 
   defp update_user_and_delete_all_tokens(changeset) do

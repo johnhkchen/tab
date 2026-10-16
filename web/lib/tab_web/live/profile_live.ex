@@ -178,6 +178,20 @@ defmodule TabWeb.ProfileLive do
           <.button variant="soft" href={~p"/export.csv"}>Download everything (CSV)</.button>
         </div>
       </.card>
+
+      <.card title="Delete my account" id="delete-account">
+        <p class="mb-3 text-ink-soft">
+          Tab deletes your email, name, payment handles, bills, and private spending, and takes you
+          out of every group. Shared expenses stay with each group under "Former member", so
+          everyone's balances stay right. Settle up first if you can. You can't undo this.
+        </p>
+        <form id="delete_form" phx-submit="delete_account" class="flex flex-wrap items-end gap-2">
+          <div class="min-w-48 flex-1">
+            <.input name="confirm" id="delete_confirm" label="Type DELETE to confirm" value="" />
+          </div>
+          <.button variant="warn" class="mb-2">Delete my account</.button>
+        </form>
+      </.card>
     </Layouts.app>
     """
   end
@@ -233,6 +247,20 @@ defmodule TabWeb.ProfileLive do
       {:error, _} ->
         {:noreply, put_flash(socket, :error, "That didn't save. Try again.")}
     end
+  end
+
+  def handle_event("delete_account", %{"confirm" => "DELETE"}, socket) do
+    {:ok, tokens} = Accounts.delete_account(socket.assigns.current_scope)
+    TabWeb.UserAuth.disconnect_sessions(tokens)
+
+    {:noreply,
+     socket
+     |> put_flash(:info, "Your account is deleted.")
+     |> redirect(to: ~p"/")}
+  end
+
+  def handle_event("delete_account", _params, socket) do
+    {:noreply, put_flash(socket, :error, "Type DELETE, in capitals, to delete your account.")}
   end
 
   def handle_event("disconnect", %{"id" => id}, socket) do
