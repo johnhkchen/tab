@@ -2,7 +2,10 @@ defmodule Tab.Inbox.ReadWorker do
   @moduledoc """
   Reads one pending item with `Tab.Reader`, as the person it belongs to.
 
-  Past the day's limit (`TAB_READS_PER_DAY`) the item waits for tomorrow. With
+  On Hosted Tab, the person's plan decides first (`Tab.Billing`): Hosted free
+  reads nothing (the item is filled in by hand), and past the month's
+  allowance the item waits for the 1st. Past the day's limit
+  (`TAB_READS_PER_DAY`) the item waits for tomorrow. With
   the API account out of credit, it waits for tomorrow too. With
   the reader off, or after it fails to make sense of a document, the item is
   marked unreadable: its person types it in by hand beside the original. A
@@ -13,7 +16,7 @@ defmodule Tab.Inbox.ReadWorker do
   alias Tab.Accounts.{Scope, User}
   alias Tab.Inbox
   alias Tab.Inbox.{Email, Item, Mail, Proposal}
-  alias Tab.{Reader, Repo}
+  alias Tab.{Billing, Reader, Repo}
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"item_id" => item_id, "user_id" => user_id}} = job) do
@@ -30,18 +33,39 @@ defmodule Tab.Inbox.ReadWorker do
   defp read(scope, item, job) do
     {:ok, today} = Inbox.reads_today(scope)
 
-    if today >= limit() do
-      wait(scope, item, job, "waiting for tomorrow's reading")
-    else
-      case Inbox.reader_input(scope, item) do
-        {:ok, input, email} -> ask(scope, item, input, sender(email), job)
-        _ -> unreadable(scope, item, "couldn't open this one")
-      end
+    case Billing.may_read(scope.user.id) do
+      {:error, :no_plan} ->
+        unreadable(scope, item, "Tab reads bills on Plus; fill this one in yourself")
+
+      {:error, {:limit, resumes_on}} ->
+        wait_until(
+          scope,
+          item,
+          job,
+          resumes_on,
+          "reading paused until #{Calendar.strftime(resumes_on, "%b %-d")}"
+        )
+
+      {:ok, paid?} ->
+        if today >= limit() do
+          wait(scope, item, job, "waiting for tomorrow's reading")
+        else
+          case Inbox.reader_input(scope, item) do
+            {:ok, input, email} -> ask(scope, item, input, sender(email), job, paid?)
+            _ -> unreadable(scope, item, "couldn't open this one")
+          end
+        end
     end
   end
 
-  defp ask(scope, item, input, sender, job) do
-    case Reader.read(input) do
+  defp ask(scope, item, input, sender, job, paid?) do
+    result = Reader.read(input)
+
+    # The model looked at it, so it counts toward the month.
+    if match?({:ok, _}, result) or result == {:error, :unreadable},
+      do: Billing.record_read(scope.user.id, nil, paid?)
+
+    case result do
       {:ok, fields} ->
         {:ok, item} = Inbox.save_reading(scope, item, Proposal.validate(fields), sender)
         # A document that joined another bill or a saved expense says nothing new.
@@ -64,10 +88,13 @@ defmodule Tab.Inbox.ReadWorker do
     end
   end
 
-  defp wait(scope, item, job, note) do
+  defp wait(scope, item, job, note),
+    do: wait_until(scope, item, job, Date.add(Date.utc_today(), 1), note)
+
+  defp wait_until(scope, item, job, %Date{} = day, note) do
     {:ok, _} = Inbox.mark(scope, item, "waiting", note)
-    tomorrow = DateTime.new!(Date.add(Date.utc_today(), 1), ~T[00:05:00])
-    {:ok, _} = Oban.insert(new(job.args, scheduled_at: tomorrow))
+    at = DateTime.new!(day, ~T[00:05:00])
+    {:ok, _} = Oban.insert(new(job.args, scheduled_at: at, priority: job.priority))
     :ok
   end
 

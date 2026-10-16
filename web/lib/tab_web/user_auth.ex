@@ -34,6 +34,8 @@ defmodule TabWeb.UserAuth do
   """
   def log_in_user(conn, user, params \\ %{}) do
     user_return_to = get_session(conn, :user_return_to)
+    # Hosted Tab: a first sign-in starts the plan (and the trial, once per address).
+    :ok = Tab.Billing.start(user)
 
     conn
     |> create_or_extend_session(user, params)

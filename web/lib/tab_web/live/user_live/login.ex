@@ -113,19 +113,32 @@ defmodule TabWeb.UserLive.Login do
   end
 
   def handle_event("submit_magic", %{"user" => %{"email" => email}}, socket) do
-    case user_for(email) do
+    full? = Tab.Billing.signups_full?()
+
+    case user_for(email, full?) do
       {:ok, user} -> Accounts.deliver_login_instructions(user, &url(~p"/users/log-in/#{&1}"))
       :error -> :ok
     end
 
+    # The same words whether or not the address has an account, so the page
+    # never says who uses Tab.
+    message =
+      if full?,
+        do:
+          "Check your email for a link to sign in. If you're new: Tab has all the new accounts it can take today, so try again tomorrow.",
+        else: "Check your email for a link to sign in. It works for 15 minutes."
+
     {:noreply,
      socket
-     |> put_flash(:info, "Check your email for a link to sign in. It works for 15 minutes.")
+     |> put_flash(:info, message)
      |> push_navigate(to: ~p"/users/log-in")}
   end
 
-  defp user_for(email) do
+  defp user_for(email, full?) do
     case Accounts.get_user_by_email(email) do
+      nil when full? ->
+        :error
+
       nil ->
         case Accounts.register_user(%{email: email}) do
           {:ok, user} -> {:ok, user}

@@ -186,7 +186,13 @@ defmodule Tab.Inbox do
       end)
 
     with {:ok, item} <- result do
-      {:ok, _} = Oban.insert(ReadWorker.new(%{item_id: item.id, user_id: scope.user.id}))
+      {:ok, _} =
+        Oban.insert(
+          ReadWorker.new(%{item_id: item.id, user_id: scope.user.id},
+            priority: Tab.Billing.read_priority(scope.user.id)
+          )
+        )
+
       {:ok, item}
     end
   end

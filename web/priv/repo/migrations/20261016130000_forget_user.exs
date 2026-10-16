@@ -54,6 +54,12 @@ defmodule Tab.Repo.Migrations.ForgetUser do
         DELETE FROM inbound_messages WHERE user_id = uid;
         DELETE FROM forwarding_addresses WHERE user_id = uid;
 
+        -- Plans: what they asked for and what was read. The trial-once list
+        -- keeps its hash of the address, with no link back to them.
+        DELETE FROM extension_requests WHERE user_id = uid;
+        DELETE FROM reads WHERE user_id = uid;
+        DELETE FROM billing_accounts WHERE user_id = uid;
+
         -- Private expenses, their shares, and what the audit log says about them.
         DELETE FROM expense_shares WHERE expense_id IN
           (SELECT id FROM expenses WHERE visibility = 'private' AND created_by = uid);

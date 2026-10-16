@@ -42,6 +42,15 @@ end
 # One currency per instance; amounts are whole cents of it.
 config :tab, :currency, System.get_env("TAB_CURRENCY", "USD") |> String.upcase()
 
+# Hosted Tab (docs/specification.md, "Phase 6"). Anything but "cloud" is self-host.
+config :tab,
+  edition: System.get_env("TAB_EDITION", "self_host"),
+  signups_per_day: String.to_integer(System.get_env("TAB_SIGNUPS_PER_DAY", "50")),
+  admin_emails:
+    System.get_env("TAB_ADMIN_EMAILS", "")
+    |> String.split(",", trim: true)
+    |> Enum.map(&(&1 |> String.trim() |> String.downcase()))
+
 # The MCP server and its OAuth endpoints (docs/specification.md, "Phase 5").
 config :tab, :mcp, System.get_env("TAB_MCP", "on") != "off"
 
