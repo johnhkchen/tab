@@ -104,6 +104,13 @@ this repo), **Gotchas**, **Next**.
   sessions and the `initialize` handshake, and `anubis_mcp` stops at
   2025-11-25. `TabWeb.MCP` is a stateless plug serving both eras. Spec updated.
 
+- Hosting: there's no Hetzner server yet. One will be made with Pulumi from a
+  new repo, `b28-infra`, as a shared box for the maintainer's projects, each
+  in its own slot (Unix user, rootless Docker, Caddy route, DNS, R2 backups,
+  Doppler token). Pulumi state in R2. Tab is the first and only project for
+  now. Deploys stay per project (`mise run deploy`). Kamal and Coolify were
+  passed over: one Docker setup for every app loses per-project isolation.
+
 ### State of the world
 - Nothing outside the repo changed.
 
