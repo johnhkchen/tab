@@ -316,8 +316,27 @@ defmodule Tab.Accounts do
   account"): `ledger.forget_user/1` removes them and their private data and
   keeps the shared ledger under "Former member". Returns the session tokens
   that stopped working, so open pages can be signed out.
+
+  On Hosted Tab, a Paddle subscription is cancelled first (and its latest
+  payment refunded if within 30 days); if Paddle can't be reached, nothing is
+  deleted and the person is asked to try again (`{:error, :billing}`), so
+  nobody is charged for an account that's gone.
   """
   def delete_account(%Scope{user: %User{id: id}}) do
+    case Repo.get(Tab.Billing.Account, id) do
+      %{paddle_subscription_id: sub, subscription_status: status}
+      when is_binary(sub) and status != "canceled" ->
+        case Tab.Billing.Paddle.cancel_and_refund(sub) do
+          :ok -> forget(id)
+          _ -> {:error, :billing}
+        end
+
+      _ ->
+        forget(id)
+    end
+  end
+
+  defp forget(id) do
     Repo.transact(fn ->
       tokens = Repo.all_by(UserToken, user_id: id)
       Repo.query!("SELECT ledger.forget_user($1)", [Ecto.UUID.dump!(id)])

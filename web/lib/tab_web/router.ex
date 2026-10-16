@@ -29,6 +29,8 @@ defmodule TabWeb.Router do
     get "/healthz", HealthController, :show
     # Resend's email.received webhook; the signature decides (Tab.Inbox.Resend).
     post "/inbound/resend", InboundController, :resend
+    # Paddle's webhook for Hosted Tab; the signature decides (Tab.Billing.Paddle).
+    post "/paddle/webhook", PaddleController, :webhook
 
     # Tab's OAuth server for the MCP server (Tab.OAuth).
     get "/.well-known/oauth-protected-resource", OAuthController, :protected_resource

@@ -61,3 +61,14 @@ config :tab,
 config :tab,
   cimd_req: [plug: {Req.Test, Tab.OAuth.CIMD}],
   cimd_resolver: {Tab.TestResolver, :resolve}
+
+# Phase 6: Paddle's sandbox, answered by a Req.Test stub.
+config :tab, :paddle,
+  env: "sandbox",
+  api_key: "pdl_test",
+  client_token: "test_client_token",
+  webhook_secret: "pdl_ntfset_test_secret",
+  plus_price_id: "pri_plus",
+  pro_price_id: "pri_pro"
+
+config :tab, paddle_req: [plug: {Req.Test, Tab.Billing.Paddle}]

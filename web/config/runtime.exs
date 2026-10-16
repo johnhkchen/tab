@@ -68,6 +68,15 @@ if config_env() != :test do
     resend_webhook_secret: env.("RESEND_WEBHOOK_SECRET"),
     resend_api_key: env.("RESEND_API_KEY"),
     reads_per_day: String.to_integer(env.("TAB_READS_PER_DAY") || "30")
+
+  # Paddle, for Hosted Tab's Plus (docs/specification.md, "Configuration").
+  config :tab, :paddle,
+    env: env.("PADDLE_ENV") || "sandbox",
+    api_key: env.("PADDLE_API_KEY"),
+    client_token: env.("PADDLE_CLIENT_TOKEN"),
+    webhook_secret: env.("PADDLE_WEBHOOK_SECRET"),
+    plus_price_id: env.("PADDLE_PLUS_PRICE_ID"),
+    pro_price_id: env.("PADDLE_PRO_PRICE_ID")
 end
 
 if config_env() == :prod do

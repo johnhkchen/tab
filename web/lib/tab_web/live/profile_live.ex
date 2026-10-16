@@ -250,13 +250,23 @@ defmodule TabWeb.ProfileLive do
   end
 
   def handle_event("delete_account", %{"confirm" => "DELETE"}, socket) do
-    {:ok, tokens} = Accounts.delete_account(socket.assigns.current_scope)
-    TabWeb.UserAuth.disconnect_sessions(tokens)
+    case Accounts.delete_account(socket.assigns.current_scope) do
+      {:ok, tokens} ->
+        TabWeb.UserAuth.disconnect_sessions(tokens)
 
-    {:noreply,
-     socket
-     |> put_flash(:info, "Your account is deleted.")
-     |> redirect(to: ~p"/")}
+        {:noreply,
+         socket
+         |> put_flash(:info, "Your account is deleted.")
+         |> redirect(to: ~p"/")}
+
+      {:error, :billing} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           "Tab couldn't cancel your Plus subscription just now, so nothing was deleted. Try again in a few minutes."
+         )}
+    end
   end
 
   def handle_event("delete_account", _params, socket) do
