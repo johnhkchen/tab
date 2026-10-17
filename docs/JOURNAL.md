@@ -8,6 +8,37 @@ this repo), **Gotchas**, **Next**.
 
 ---
 
+## 2026-10-17: Terms and Refunds live
+
+**Done**
+- Filled the blanks in Terms and Refunds (`1411f7d`): contact `john@b28.dev`,
+  governing law California, United States.
+- Deployed the site (version `73a7f56f`). `/docs/terms/`, `/docs/refunds/`, and
+  the Hosted Tab section of `/docs/privacy/` answer 200 on tab.b28.dev.
+
+**Decided**
+- Legal pages stay Starlight Markdown in git, not EmDash: git keeps a dated
+  record of what the terms said, they change in the same commit as the billing
+  rules, and they're prerendered (no D1 read). EmDash stays for landing and
+  pricing copy.
+- Governing law: California, United States.
+
+**State of the world**
+- tab-site Worker version `73a7f56f-ff50-4c5a-828b-e536ab6bab7c`.
+
+**Gotchas**
+- `wrangler deploy` can fail with `fetch failed` / `write EPIPE` mid-upload;
+  running it again worked.
+
+**Next**
+1. User: Paddle account (sandbox first), keys into Doppler `tab/dev`; point
+   Paddle's review at the Terms, Refunds, and Privacy URLs.
+2. User: b28-infra setup (Hetzner token, R2 state bucket, Cloudflare token,
+   Doppler project, SSH key), then `mise run up`.
+3. User: a standard Anthropic API key for Cloud.
+
+---
+
 ## 2026-10-16: v0.5.0 released; phase 5 built; phase 6 specified and mostly built
 
 ### Done
