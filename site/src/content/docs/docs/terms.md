@@ -8,7 +8,7 @@ run Tab yourself, the open-source license (AGPLv3) covers you instead, and
 none of this applies.
 
 Hosted Tab is run by John Chen. To reach him, email
-[[CONTACT EMAIL]].
+john@b28.dev.
 
 ## Your account
 
@@ -82,4 +82,4 @@ source, so you could also keep running it yourself.
 
 We'll post changes here and email you about anything that matters at least
 30 days before it applies. These terms follow the law of
-[[STATE, COUNTRY]].
+California, United States.

@@ -10,7 +10,7 @@ don't need a reason.
 
 - Open your plan page in Tab, choose **Manage billing**, and ask Paddle for a
   refund there, or
-- Reply to your Paddle receipt, or email [[CONTACT EMAIL]].
+- Reply to your Paddle receipt, or email john@b28.dev.
 
 Paddle returns the money to the card or account you paid with. Your account
 moves to Hosted free, and you keep everything except bill reading.
